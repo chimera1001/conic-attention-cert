@@ -1,0 +1,15 @@
+# Versions used for the paper's experiments (Python 3.14.7, CPU only).
+numpy==2.4.6
+scipy==1.18.1
+pandas==3.0.5
+matplotlib==3.11.0
+cvxpy==1.9.3
+mosek==11.2.4            # needs a MOSEK licence (free for academic use)
+gurobipy==13.0.3         # needs a Gurobi licence; used only for the exact references on synthetic heads
+torch==2.14.0            # CPU build
+transformers==5.17.0
+threadpoolctl==3.5.0
+psutil==7.2.2
+pytest==9.0.3
+# auto_LiRPA 0.8.0 (bound propagation baselines): not on PyPI at this version; install from GitHub, see README.md
+appdirs==1.4.4           # dependency of auto_LiRPA

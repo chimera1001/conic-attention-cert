@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software or the benchmark, please cite the paper below."
+title: "conic-attention-cert: code and benchmark for Conic Certification of Transformer Attention"
+authors:
+  - family-names: Ataei
+    given-names: Masoud
+    affiliation: University of Toronto
+version: 1.0.0
+date-released: 2026-10-30
+license: MIT
+repository-code: "https://github.com/chimera1001/conic-attention-cert"
+preferred-citation:
+  type: article
+  title: "Conic Certification of Transformer Attention"
+  authors:
+    - family-names: Ataei
+      given-names: Masoud
+      affiliation: University of Toronto
+  year: 2026
+  journal: "To appear"
