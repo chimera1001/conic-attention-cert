@@ -17,7 +17,10 @@ boxes). This repository contains
 * the baselines and diagnostics of Section 7: an auto_LiRPA harness (IBP, CROWN, alpha-CROWN) on the same heads, and
   the Hessian and per-operation tools of the mechanism test;
 * one script per experiment of Section 7, the figure data and scripts of the paper, and a benchmark of 17,280 exact
-  worst cases of GPT-2 small heads (`benchmark/`).
+  worst cases of GPT-2 small heads (`benchmark/`);
+* two extensions of Section 7 that are not in the arXiv version: the Vertex-Softmax baseline (the exact maximum of the
+  softmax-weighted support values over the box of certified scores) and a logit-margin specification, in
+  `experiments/jmlr_extensions.py` (see `scripts/reproduce.md`).
 
 ## Layout
 

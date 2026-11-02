@@ -103,6 +103,30 @@ def l3_max_vsigma(v: np.ndarray, s_lo: np.ndarray, s_hi: np.ndarray) -> tuple[fl
     return best, best_s
 
 
+def vertex_softmax(h: np.ndarray, s_lo: np.ndarray, s_hi: np.ndarray) -> dict:
+    """The Vertex-Softmax bound ``r_VS = max {sum_j softmax(s)_j h_j : s_lo <= s <= s_hi}``, computed exactly over the
+    ``n + 1`` threshold vertices of the remark on scores in a box (``h`` sorted in decreasing order, a top segment of
+    ``k`` keys at ``s_hi`` and the rest at ``s_lo``, ``k = 0..n``), with the softmax in log space
+    (``softmax(s)_j = exp(s_j - logsumexp(s))``). With ``h`` the support values ``h_j^max`` this is the tightest bound
+    that the score intervals allow with every value at its largest (Rezazadeh and Gholami Davoodi); it lies between
+    ``p*`` and the first-order certificate ``r_pp``. Returns ``value``, the maximizing vertex ``s``, its pattern ``a``,
+    the size ``k`` of its top segment and the values of all ``n + 1`` vertices."""
+    h = np.asarray(h, float)
+    lo = np.asarray(s_lo, float)
+    hi = np.asarray(s_hi, float)
+    order = np.argsort(-h, kind="stable")
+    vals = np.empty(h.shape[0] + 1)
+    best = None
+    for k in range(h.shape[0] + 1):
+        s = lo.copy()
+        s[order[:k]] = hi[order[:k]]
+        a = np.exp(s - logsumexp(s))
+        vals[k] = float(a @ h)
+        if best is None or vals[k] > best[0]:
+            best = (vals[k], s, a, k)
+    return {"value": best[0], "s": best[1], "a": best[2], "k": best[3], "vertex_values": vals}
+
+
 # ------------------------------------------------------------------ attention intervals (Lemma 2)
 def softmax_interval_bounds(s_lo: np.ndarray, s_hi: np.ndarray) -> dict:
     """``a_lo_j = 1/(1+sum_{l!=j} exp(s_hi_l - s_lo_j))``, ``a_hi_j = 1/(1+sum_{l!=j} exp(s_lo_l - s_hi_j))``,
@@ -448,7 +472,10 @@ def controls(inst: Instance, method: str = "auto", eps_target: float = 1e-3,
     """The controlling quantities that depend on the score intervals (Table 1: ``Delta``, attention intervals,
     ``tau`` interval, ``gamma``, ``w_t``), the norm value radius ``rad``, the first-order bounds of Theorem 9 in norm
     form (``bound_B``, ``bound_C``) and a regime label: ``SMALL_WIDTH`` / ``MARGIN`` if the width / margin bound meets
-    ``eps_target``, else ``AMBIGUOUS``."""
+    ``eps_target``, else ``AMBIGUOUS``. Also the support values ``h_max`` and the Vertex-Softmax bound ``r_VS``
+    (:func:`vertex_softmax`) on the same score intervals."""
+    from aimp.theory import support_values
+
     si = intervals if intervals is not None else score_intervals(inst, method, threads=threads)
     s_lo, s_hi = si["s_lo"], si["s_hi"]
     n = inst.n
@@ -477,7 +504,10 @@ def controls(inst: Instance, method: str = "auto", eps_target: float = 1e-3,
         regime = "MARGIN"
     else:
         regime = "AMBIGUOUS"
+    h_max = support_values(inst)
+    vx = vertex_softmax(h_max, s_lo, s_hi)
     return {
+        "h_max": h_max, "r_VS": vx["value"], "VS_k": vx["k"],
         "score_intervals": si, "s_lo": s_lo, "s_hi": s_hi, "sbar": sbar, "Delta": Delta,
         "a_lo": sm["a_lo"], "a_hi": sm["a_hi"], "tau_lo": sm["tau_lo"], "tau_hi": sm["tau_hi"],
         "ahat": softmax(sbar), "rad": rad, "rad_is_upper_bound": vs["is_upper_bound"],
@@ -491,8 +521,8 @@ def controls(inst: Instance, method: str = "auto", eps_target: float = 1e-3,
 def child_controls(ctrl: dict, s_lo: np.ndarray, s_hi: np.ndarray, n: int) -> dict:
     """Controls of a branch-and-bound node: the same instance restricted to score box ``[s_lo, s_hi]`` (a sub-box of the
     parent's certified intervals). Everything that depends on the scores (attention intervals, ``tau``, ``Delta``,
-    ``ahat``, ``gamma``, cut radii, ``w_t``) is recomputed; set-only quantities (``rad``, ``R``, ``c_norm``) are
-    inherited."""
+    ``ahat``, ``gamma``, cut radii, ``w_t``, ``r_VS``) is recomputed; set-only quantities (``rad``, ``R``, ``c_norm``,
+    ``h_max``) are inherited."""
     s_lo = np.asarray(s_lo, float)
     s_hi = np.asarray(s_hi, float)
     sbar = (s_lo + s_hi) / 2
@@ -514,6 +544,9 @@ def child_controls(ctrl: dict, s_lo: np.ndarray, s_hi: np.ndarray, n: int) -> di
         "w_t_loose": t_width(s_lo, s_hi, "loose"), "w_t": t_width(s_lo, s_hi, "tight"),
         "score_intervals": {**ctrl.get("score_intervals", {}), "s_lo": s_lo, "s_hi": s_hi, "branch": True},
     })
+    if ctrl.get("h_max") is not None:
+        vs = vertex_softmax(ctrl["h_max"], s_lo, s_hi)
+        out.update({"r_VS": vs["value"], "VS_k": vs["k"]})
     return out
 
 

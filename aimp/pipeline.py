@@ -10,7 +10,10 @@
   key in the canonical frame of :func:`canonical_frame` (the benchmark of ``benchmark/``).
 * :func:`evaluate_fq_sdp` — the certificate on a fixed-query unit, measured against the exact worst case.
 
-Every reported semidefinite value is the safe dual bound of Proposition 16 (``value_safe``).
+Every procedure takes the unit's specification ``spec`` (``"a"``, the paper's, by default; ``"lm"``, the logit-margin
+specification of :func:`aimp.gpt2_units.make_instance`) and records the Vertex-Softmax bound ``r_VS`` on the unit's
+score intervals (:func:`aimp.bounds.vertex_softmax`). Every reported semidefinite value is the safe dual bound of
+Proposition 16 (``value_safe``).
 """
 from __future__ import annotations
 
@@ -85,7 +88,7 @@ def collapse_fields(inst, ctrl, *, phi_min_strong: float, eta: float, pruning_sl
             "n_pruned": int(np.sum(np.clip(np.asarray(ctrl["a_hi"], float), 0, 1) <= 1e-6))}
 
 
-def evaluate_unit(l: int, h: int, p: int, pos: int, rho: float, threads: int | None = None) -> dict:
+def evaluate_unit(l: int, h: int, p: int, pos: int, rho: float, threads: int | None = None, spec: str = "a") -> dict:
     """The certificate of one varying-query unit with the procedure of Appendix B."""
     from aimp.certify import certify, needs_retol, sdp_retol, theorem_check
     from aimp.gpt2 import nominal_value_range
@@ -93,7 +96,7 @@ def evaluate_unit(l: int, h: int, p: int, pos: int, rho: float, threads: int | N
 
     T: dict = {}
     t0 = time.perf_counter()
-    inst = U.make_instance(l, h, p, pos, rho)
+    inst = U.make_instance(l, h, p, pos, rho, spec=spec)
     si, ctrl = controls(inst, threads)
     T["controls_s"] = time.perf_counter() - t0
     rng_ = nominal_value_range(inst)
@@ -128,9 +131,10 @@ def evaluate_unit(l: int, h: int, p: int, pos: int, rho: float, threads: int | N
     g_ = ctrl["gamma"]  # margin bound with the directional constant: 4 (n - 1) e^{-gamma} rad_c (gamma > 0)
     bound_C_c = 4 * (inst.n - 1) * math.exp(-g_) * cf["rad_c"] if (_finite(g_) and g_ > 0) else None
     rec.update({
-        "layer": l, "head": h, "prompt": p, "pos": pos, "rho_rel": rho, "spec": "a", "range": rng_,
+        "layer": l, "head": h, "prompt": p, "pos": pos, "rho_rel": rho, "spec": spec, "range": rng_,
         "s_lo": ctrl["s_lo"], "s_hi": ctrl["s_hi"], "a_lo": ctrl["a_lo"], "a_hi": ctrl["a_hi"],
-        "lb_ms": lb_ms, "phi_min_ms": pm_ms, "lb_floor": lb_floor, "lb_strong": lbs, "phi_min_strong": pms,
+        "h_max": ctrl["h_max"], "r_VS": ctrl["r_VS"], "VS_k": ctrl["VS_k"], "c_norm": ctrl["c_norm"],
+        "phi_nominal": rec["phi_nominal"], "lb_ms": lb_ms, "phi_min_ms": pm_ms, "lb_floor": lb_floor, "lb_strong": lbs, "phi_min_strong": pms,
         "lb_winner": b["lb_winner"], "phi_min_winner": b["phi_min_winner"], "lb_best_by_type": b["lb_best_by_type"],
         "phi_min_best_by_type": b["phi_min_best_by_type"], "lb_info": b["lb_info"], "sdp_starts": bool(starts),
         "retol": retol is not None, "retol_info": retol, "value_safe_first": vs0,
@@ -143,24 +147,27 @@ def evaluate_unit(l: int, h: int, p: int, pos: int, rho: float, threads: int | N
         "bound_C_c": bound_C_c,
         "margin_regime": bool(bound_C_c is not None and spread > 0 and bound_C_c <= MARGIN_REL * spread),
         "valid": _valid(rec["cert"], lbs), "valid_value_safe": _valid(vs, lbs), "valid_greedy": _valid(rec["r_greedy"], lbs),
+        "valid_VS": _valid(ctrl["r_VS"], lbs),
         "threads": threads, "env": env_info(), "git": git_commit(), "peak_rss_gb": peak_rss_gb()})
     rec["times"].update({**T, "unit_total_s": time.perf_counter() - t0})
     return rec
 
 
 # ------------------------------------------------------------------------------------------------ fixed query
-def canonical_frame(l: int, h: int, p: int, pos: int) -> dict:
+def canonical_frame(l: int, h: int, p: int, pos: int, c: np.ndarray | None = None) -> dict:
     """The plane in which every varying key of a fixed-query unit moves, in the 768-dimensional post-normalization
     space: the score of key ``j`` changes by ``alpha . delta_j`` with ``alpha = W_K q_pos / sqrt(d_k)`` (``q_pos`` the
     fixed query) and its value along ``c`` by ``beta . delta_j`` with ``beta = W_V W_O c``. ``e1 = alpha / ||alpha||``,
     ``e2`` = the normalized component of ``beta`` orthogonal to ``e1``. A key at canonical angle ``theta`` is the token
-    ``zbar_j + rho_j (cos theta e1 + sin theta e2)``."""
+    ``zbar_j + rho_j (cos theta e1 + sin theta e2)``. ``c``: the specification (default: the direction of the nominal
+    head output)."""
     hw, _ = U.head_data(l, h)
     P = U.ctx()["P"][p]
     z = P["z"][l]
     q = z[pos] @ hw["W_Q"] + hw["b_Q"]
-    ybar = P["merged"][l][pos, h * 64:(h + 1) * 64] @ hw["W_O"]
-    c = ybar / np.linalg.norm(ybar)
+    if c is None:
+        ybar = P["merged"][l][pos, h * 64:(h + 1) * 64] @ hw["W_O"]
+        c = ybar / np.linalg.norm(ybar)
     alpha = hw["W_K"] @ q / math.sqrt(hw["W_K"].shape[1])
     beta = hw["W_V"] @ (hw["W_O"] @ c)
     e1 = alpha / np.linalg.norm(alpha)
@@ -177,7 +184,7 @@ def angles_of(frame: dict, deltas: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.arctan2(b, a), np.linalg.norm(deltas, axis=1)
 
 
-def evaluate_fq_exact(l: int, h: int, p: int, pos: int, rho: float, threads: int = 1) -> dict:
+def evaluate_fq_exact(l: int, h: int, p: int, pos: int, rho: float, threads: int = 1, spec: str = "a") -> dict:
     """The exact worst case of one fixed-query unit (Theorem 7; certified subdivision of each key's boundary angle in
     place of the closed form of part (iii)), the first-order certificate and the canonical angles of the maximizing
     and minimizing inputs."""
@@ -188,7 +195,7 @@ def evaluate_fq_exact(l: int, h: int, p: int, pos: int, rho: float, threads: int
     from aimp.relax_ps import solve_ps_greedy
 
     t0 = time.perf_counter()
-    fq = U.make_instance(l, h, p, pos, rho, fixed_query=True)
+    fq = U.make_instance(l, h, p, pos, rho, fixed_query=True, spec=spec)
     si, ctrl = controls(fq, threads)
     t1 = time.perf_counter()
     g = solve_ps_greedy(fq, ctrl, "auto")
@@ -205,7 +212,7 @@ def evaluate_fq_exact(l: int, h: int, p: int, pos: int, rho: float, threads: int
     _, pr = U.head_data(l, h)
     Pq = fq_problem(fq)
     var_keys = [fq.keys[idx] for idx in Pq.var]
-    fr = canonical_frame(l, h, p, pos)
+    fr = canonical_frame(l, h, p, pos, c=fq.c)
     ang = {}
     for tag, Zp in (("max", ex["Z_max"]), ("min", ex["Z_min"])):
         D = np.zeros((len(var_keys), pr.Vt.shape[1]))
@@ -217,8 +224,9 @@ def evaluate_fq_exact(l: int, h: int, p: int, pos: int, rho: float, threads: int
         ang[tag] = {"theta": th, "norm": nr, "off_plane": inplane}
     rho_j = np.array([fq.sets[j].rho for j in var_keys])
     nomv = nominal(fq)
-    return {"layer": l, "head": h, "prompt": p, "pos": pos, "rho_rel": rho, "n": fq.n, "spec": "a", "range": rng_,
-            "phi_nominal": nomv["phi"], "p_fq_lo": p_lo, "p_fq_hi": p_hi, "min_fq_lo": m_lo, "min_fq_hi": m_hi,
+    return {"layer": l, "head": h, "prompt": p, "pos": pos, "rho_rel": rho, "n": fq.n, "spec": spec, "range": rng_,
+            "phi_nominal": nomv["phi"], "h_max": ctrl["h_max"], "r_VS": ctrl["r_VS"], "VS_k": ctrl["VS_k"],
+            "valid_VS": _valid(ctrl["r_VS"], p_lo), "c_norm": ctrl["c_norm"], "p_fq_lo": p_lo, "p_fq_hi": p_hi, "min_fq_lo": m_lo, "min_fq_hi": m_hi,
             "p_fq": p_mid, "min_fq": m_mid, "spread_fq": spread, "exact_status": ex["status"],
             "status_max": ex["status_max"], "status_min": ex["status_min"],
             "r_greedy": g.value, "greedy_cut": g.diagnostics["cut_used"], "greedy_recovered": g.recovered_value,
@@ -243,7 +251,8 @@ def evaluate_fq_exact(l: int, h: int, p: int, pos: int, rho: float, threads: int
             "threads": threads, "git": git_commit(), "env": env_info(), "peak_rss_gb": peak_rss_gb()}
 
 
-def evaluate_fq_sdp(l: int, h: int, p: int, pos: int, rho: float, xr: dict, threads: int | None = None) -> dict:
+def evaluate_fq_sdp(l: int, h: int, p: int, pos: int, rho: float, xr: dict, threads: int | None = None,
+                    spec: str = "a") -> dict:
     """The certificate on a fixed-query unit (the same procedure as :func:`evaluate_unit`), measured against the
     exact worst case ``xr`` of :func:`evaluate_fq_exact`."""
     from aimp.certify import certify, needs_retol, sdp_retol, theorem_check
@@ -252,7 +261,7 @@ def evaluate_fq_sdp(l: int, h: int, p: int, pos: int, rho: float, xr: dict, thre
 
     T: dict = {}
     t0 = time.perf_counter()
-    fq = U.make_instance(l, h, p, pos, rho, fixed_query=True)
+    fq = U.make_instance(l, h, p, pos, rho, fixed_query=True, spec=spec)
     si, ctrl = controls(fq, threads)
     T["controls_s"] = time.perf_counter() - t0
     rng_ = nominal_value_range(fq)
@@ -281,9 +290,10 @@ def evaluate_fq_sdp(l: int, h: int, p: int, pos: int, rho: float, xr: dict, thre
     p_fq = xr["p_fq"] if xexact else None
     spread_fq = xr["spread_fq"] if xexact else None
     rec.update({
-        "layer": l, "head": h, "prompt": p, "pos": pos, "rho_rel": rho, "spec": "a", "range": rng_, "fixed_query": True,
+        "layer": l, "head": h, "prompt": p, "pos": pos, "rho_rel": rho, "spec": spec, "range": rng_, "fixed_query": True,
         "s_lo": ctrl["s_lo"], "s_hi": ctrl["s_hi"], "a_lo": ctrl["a_lo"], "a_hi": ctrl["a_hi"],
-        "lb_strong": lbs, "phi_min_strong": pms, "lb_winner": b["lb_winner"], "lb_best_by_type": b["lb_best_by_type"],
+        "h_max": ctrl["h_max"], "r_VS": ctrl["r_VS"], "VS_k": ctrl["VS_k"], "c_norm": ctrl["c_norm"],
+        "phi_nominal": rec["phi_nominal"], "lb_strong": lbs, "phi_min_strong": pms, "lb_winner": b["lb_winner"], "lb_best_by_type": b["lb_best_by_type"],
         "sdp_starts": bool(starts), "retol": retol is not None, "retol_info": retol, "value_safe_first": vs0,
         "exact_status": xr.get("exact_status"), "p_fq_lo": xr["p_fq_lo"], "p_fq_hi": xr["p_fq_hi"], "p_fq": p_fq,
         "min_fq": xr.get("min_fq"), "spread_fq": spread_fq,
@@ -296,6 +306,7 @@ def evaluate_fq_sdp(l: int, h: int, p: int, pos: int, rho: float, xr: dict, thre
                            (rec["cert"] - p_fq) / cf["bound_F0v_final"]),
         "lb_strong_gap_exact": None if not xexact else p_fq - lbs,
         "valid": _valid(rec["cert"], lb_c), "valid_value_safe": _valid(vs, lb_c), "valid_greedy": _valid(rec["r_greedy"], lb_c),
+        "valid_VS": _valid(ctrl["r_VS"], lb_c),
         "threads": threads, "env": env_info(), "git": git_commit(), "peak_rss_gb": peak_rss_gb()})
     rec["times"].update({**T, "unit_total_s": time.perf_counter() - t0})
     return rec

@@ -157,6 +157,7 @@ def extract(model, tok, prompt: str) -> dict:
     A = [a[0].detach().cpu().numpy().astype(np.float64) for a in out.attentions]
     res = {k: np.stack(v) for k, v in rec.items()}
     res["A"] = np.stack(A)
+    res["logits"] = out.logits[0].detach().cpu().numpy().astype(np.float64).copy()  # (T x vocab)
     res["ids"] = ids[0].numpy().copy()
     res["tokens"] = [tok.decode([int(t)]) for t in ids[0]]
     return res
@@ -189,6 +190,51 @@ def gate(ext: dict, weights: list[dict]) -> dict:
     worst = {k: max(r[k] for r in rows) for k in ("z_abs", "A_abs", "head_out_abs_max", "attn_abs", "block_out_abs")}
     return {"rows": rows, "worst": worst, "tol": GATE_TOL,
             "passed": bool(all(v <= GATE_TOL for v in worst.values()))}
+
+
+# ------------------------------------------------------------------------------- final LayerNorm and unembedding
+def final_weights(model) -> dict:
+    """The final LayerNorm ``ln_f`` (``g``, ``b``, ``eps``) and the tied unembedding ``wte`` (vocab x 768), float64."""
+    def a(t):
+        return t.detach().cpu().numpy().astype(np.float64).copy()
+
+    lnf = model.transformer.ln_f
+    return {"lnf_g": a(lnf.weight), "lnf_b": a(lnf.bias), "lnf_eps": float(lnf.eps), "wte": a(model.transformer.wte.weight)}
+
+
+def final_logits(x: np.ndarray, F: dict) -> np.ndarray:
+    """Logits from the residual stream after the last block (rows): ``ln_f(x) wte^T`` (the tied head has no bias)."""
+    return layernorm(x, F["lnf_g"], F["lnf_b"], F["lnf_eps"]) @ F["wte"].T
+
+
+def numpy_logits(x0: np.ndarray, weights: list[dict], F: dict) -> np.ndarray:
+    """The whole numpy forward pass from the input of block 0 (the embeddings): every block, then ``ln_f`` and ``wte``."""
+    x = np.asarray(x0, float)
+    for W in weights:
+        x = block_forward(x, W)["out"]
+    return final_logits(x, F)
+
+
+def lnf_sigma(x: np.ndarray, eps: float) -> float:
+    """``sigma(x) = (||P x||^2 / d + eps)^(1/2)`` of ``ln_f`` (``P = I - 11^T / d``)."""
+    Px = x - x.mean()
+    return math.sqrt(float(Px @ Px) / x.shape[0] + eps)
+
+
+def lm_spec(xbar: np.ndarray, F: dict, t1: int, t2: int) -> dict:
+    """The logit-margin specification. With the ``ln_f`` scale frozen at ``sigma_bar = sigma(xbar)``, a change ``y`` of the
+    residual stream at the position changes ``logit_t1 - logit_t2`` by ``c_m^T y`` with
+    ``c_m = P diag(g) (w_t1 - w_t2) / sigma_bar`` (the bias of ``ln_f`` cancels). Also the exact gradient of the logit
+    difference at ``xbar`` (with the derivative of ``sigma``) and its cosine with ``c_m``."""
+    d = xbar.shape[0]
+    g, wd = F["lnf_g"], F["wte"][t1] - F["wte"][t2]
+    sig = lnf_sigma(xbar, F["lnf_eps"])
+    u = g * wd
+    c_m = (u - u.mean()) / sig
+    Px = xbar - xbar.mean()
+    grad = c_m - Px * float(Px @ u) / (d * sig ** 3)
+    cos = float(c_m @ grad) / (float(np.linalg.norm(c_m)) * float(np.linalg.norm(grad)))
+    return {"c_m": c_m, "sigma_bar": sig, "grad_exact": grad, "cos_exact": cos}
 
 
 # ----------------------------------------------------------------------------------------------- projection
