@@ -54,7 +54,7 @@ L=pd.read_csv(DATA+"P3b_ladder.csv")
 rhos=[0.001,0.002,0.005,0.01,0.02]
 fig,axs=plt.subplots(1,2,figsize=(6.6,2.55))
 ax=axs[0]
-for q,lab,col,mk in [("spread","output spread",C3,"^"),("greedy","first-order gap",C2,"s"),("cert","certificate gap",C1,"o")]:
+for q,lab,col,mk in [("spread","range of motion",C3,"^"),("greedy","first-order gap",C2,"s"),("cert","certificate gap",C1,"o")]:
     M=np.array([L[f"{q}_{x}"].values for x in rhos])
     M=np.where(M>0,M,np.nan)
     med=np.nanmedian(M,axis=1); lo=np.nanpercentile(M,25,axis=1); hi=np.nanpercentile(M,75,axis=1)
@@ -64,7 +64,7 @@ ax.set_xlabel(r"relative radius $\rho_{\rm rel}$"); ax.set_ylabel("value (median
 ax.legend(loc="lower right",fontsize=6.6); ax.set_title("five-radius ladder, 720 units",loc="left")
 ax=axs[1]
 bins=np.linspace(0,3,61)
-for q,lab,col in [("spread","output spread",C3),("greedy","first-order gap",C2),("cert","certificate gap",C1)]:
+for q,lab,col in [("spread","range of motion",C3),("greedy","first-order gap",C2),("cert","certificate gap",C1)]:
     v=L[f"slope_{q}_small"].dropna().clip(0,3)
     ax.hist(v,bins=bins,histtype="step",color=col,lw=1.4,label=lab)
 for x in (1,2): ax.axvline(x,color=MUTED,lw=0.8)
@@ -82,7 +82,7 @@ for ax,xcol,xlab,ttl in [(axs[0],"S",r"weighted secant slack $S$","raw slack"),(
 x=np.logspace(-7,1.5,10); axs[1].plot(x,x,color=MUTED,lw=0.9); axs[1].text(2e-6,6e-6,r"$y=x$",color=INK2,fontsize=6.8,rotation=0)
 axs[1].set_xlim(1e-7,50)
 axs[0].set_ylabel(r"certified gap $\mathrm{cert}-\mathrm{lb}$")
-cb=fig.colorbar(sc,ax=axs,fraction=0.025,pad=0.02); cb.set_label(r"dispersion $\theta$"); cb.outline.set_edgecolor(AXIS)
+cb=fig.colorbar(sc,ax=axs,fraction=0.025,pad=0.02); cb.set_label(r"dispersion $1-\|a(\bar z)\|^2$"); cb.outline.set_edgecolor(AXIS)
 fig.savefig(OUT+"fig_collapse.pdf",dpi=300); plt.close(fig)
 
 # ---------- Figure 4: comparison with linear bound propagation ----------

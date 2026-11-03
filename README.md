@@ -1,7 +1,7 @@
 # conic-attention-cert
 
 Code and benchmark for the paper **Conic Certification of Transformer Attention** (Masoud Ataei, University of Toronto,
-2026).
+2026; [arXiv:2611.00585](https://arxiv.org/abs/2611.00585)).
 
 Repository: https://github.com/chimera1001/conic-attention-cert
 
@@ -105,11 +105,15 @@ the Hugging Face weights and checks them.
 ## Citation
 
 ```bibtex
-@article{ataei2026conic,
-  title   = {Conic Certification of Transformer Attention},
-  author  = {Ataei, Masoud},
-  year    = {2026},
-  note    = {To appear. Code: https://github.com/chimera1001/conic-attention-cert}
+@misc{ataei2026conic,
+  title         = {Conic Certification of Transformer Attention},
+  author        = {Ataei, Masoud},
+  year          = {2026},
+  eprint        = {2611.00585},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  doi           = {10.48550/arXiv.2611.00585},
+  url           = {https://arxiv.org/abs/2611.00585}
 }
 ```
 
