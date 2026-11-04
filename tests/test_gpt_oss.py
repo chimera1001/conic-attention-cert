@@ -8,8 +8,11 @@ head's scores, pattern and output at random admissible inputs, computed from the
 E2; the score intervals contain sampled scores (the sink's is a point, the fixed-query ones are exact); the exact
 fixed-query bracket contains every sampled value and lies below the first-order and vertex bounds; the worst-case inputs
 rebuilt from the canonical angles lie in their planes; the auto_LiRPA module with the sink passes its forward gate; the
-logit-margin vector is the frozen-scale linearization; the GPT-2 default of the unit construction is unchanged. The last
-test runs E2 on real heads when the real cache exists (skipped otherwise)."""
+logit-margin vector is the frozen-scale linearization; the GPT-2 default of the unit construction is unchanged; E2 on real
+heads when the real cache exists (skipped otherwise). The last tests check that ``prepare()`` never overwrites an existing
+cache: a complete cache is only read, nothing is written through a symlink, an incomplete cache is not re-extracted without
+``force``, the workers never extract, and a new extraction is moved into place from a temporary directory only when it
+succeeded (the previous directory kept)."""
 from __future__ import annotations
 
 import json
@@ -320,3 +323,111 @@ def test_rescaled_formulation_is_exact(syn_cache):
     assert abs(obj - fw["phi"]) <= 1e-12 * max(1.0, abs(fw["phi"]))
     r = SM.solve_sdp1(fq, ctrl, threads=1, tol=None, cut="auto", scale_a=True)
     assert r.diagnostics["value_safe"] >= ex["p_fq_hi"] - 1e-9 * max(1.0, abs(ex["p_fq_hi"]))
+
+
+# ------------------------------------------------------------------ prepare() never overwrites an existing cache
+def _fake_extract(calls: list):
+    def f(target, log=print, dtype="float32"):
+        calls.append(target)
+        for name in G.CACHE_FILES:
+            (target / name).write_text(json.dumps({"new": True}) if name == "extract.json" else "new")
+        return {"new": True}
+    return f
+
+
+def _no_extract(target, log=print, dtype="float32"):
+    raise AssertionError("prepare() must not extract here")
+
+
+def test_prepare_reads_a_complete_cache_without_writing(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIMP_CACHE_DIR", str(tmp_path / "real"))
+    c = G.model_cache()
+    c.mkdir(parents=True)
+    for name in G.CACHE_FILES:
+        (c / name).write_text("old")
+    (c / "extract.json").write_text(json.dumps({"old": True}))
+    monkeypatch.setattr(G, "_extract_into", _no_extract)
+    assert G.prepare() == {"old": True}
+    link_root = tmp_path / "linked"  # a complete cache is also read through a symlink (nothing is written)
+    link_root.mkdir()
+    (link_root / G.MODEL_NAME).symlink_to(c)
+    monkeypatch.setenv("AIMP_CACHE_DIR", str(link_root))
+    assert G.prepare() == {"old": True}
+
+
+def test_prepare_never_writes_through_a_symlink(tmp_path, monkeypatch):
+    """The case of a symlink to another project's cache without ``extract.json``: refused, with or without ``force``."""
+    other = tmp_path / "other_project_cache"
+    other.mkdir()
+    (other / "prompt0.npz").write_text("theirs")
+    root = tmp_path / "cache"
+    root.mkdir()
+    (root / G.MODEL_NAME).symlink_to(other)
+    monkeypatch.setenv("AIMP_CACHE_DIR", str(root))
+    monkeypatch.setattr(G, "_extract_into", _no_extract)
+    for force in (False, True):
+        with pytest.raises(SystemExit, match="symlink"):
+            G.prepare(force=force)
+    assert sorted(q.name for q in other.iterdir()) == ["prompt0.npz"] and (other / "prompt0.npz").read_text() == "theirs"
+    real = tmp_path / "real2" / G.MODEL_NAME  # a symlinked entry of a real cache directory is refused too
+    real.mkdir(parents=True)
+    (real / "final.npz").symlink_to(other / "prompt0.npz")
+    monkeypatch.setenv("AIMP_CACHE_DIR", str(real.parent))
+    with pytest.raises(SystemExit, match="symlink"):
+        G.prepare(force=True)
+    assert (other / "prompt0.npz").read_text() == "theirs"
+
+
+def test_prepare_does_not_reextract_an_incomplete_cache_without_force(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIMP_CACHE_DIR", str(tmp_path))
+    c = G.model_cache()
+    c.mkdir(parents=True)
+    (c / "prompt0.npz").write_text("old")
+    monkeypatch.setattr(G, "_extract_into", _no_extract)
+    with pytest.raises(SystemExit, match="--force"):
+        G.prepare()
+    assert sorted(q.name for q in c.iterdir()) == ["prompt0.npz"] and (c / "prompt0.npz").read_text() == "old"
+    _clear()  # the workers never start an extraction
+    monkeypatch.setattr(G, "prepare", lambda *a, **k: pytest.fail("a worker started an extraction"))
+    with pytest.raises(SystemExit, match="not found or incomplete"):
+        G.layer_weights(0)
+
+
+def test_prepare_force_moves_the_new_extraction_into_place(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIMP_CACHE_DIR", str(tmp_path))
+    c = G.model_cache()
+    c.mkdir(parents=True)
+    (c / "prompt0.npz").write_text("old")
+    calls = []
+    monkeypatch.setattr(G, "_extract_into", _fake_extract(calls))
+    assert G.prepare(force=True) == {"new": True}
+    assert len(calls) == 1 and calls[0].parent == tmp_path and calls[0].name.startswith(f".{G.MODEL_NAME}.tmp-")
+    assert all((c / n).read_text() == (json.dumps({"new": True}) if n == "extract.json" else "new") for n in G.CACHE_FILES)
+    kept = [q for q in tmp_path.iterdir() if q.name.startswith(f"{G.MODEL_NAME}.replaced-")]
+    assert len(kept) == 1 and sorted(q.name for q in kept[0].iterdir()) == ["prompt0.npz"]
+    assert (kept[0] / "prompt0.npz").read_text() == "old"
+    assert not [q for q in tmp_path.iterdir() if ".tmp-" in q.name]
+
+
+def test_prepare_failed_extraction_leaves_the_cache_untouched(tmp_path, monkeypatch):
+    import shutil
+
+    monkeypatch.setenv("AIMP_CACHE_DIR", str(tmp_path))
+    c = G.model_cache()
+    c.mkdir(parents=True)
+    (c / "prompt0.npz").write_text("old")
+
+    def broken(target, log=print, dtype="float32"):
+        (target / "prompt0.npz").write_text("partial")
+        raise SystemExit("E1 failed")
+
+    monkeypatch.setattr(G, "_extract_into", broken)
+    with pytest.raises(SystemExit, match="E1 failed"):
+        G.prepare(force=True)
+    assert sorted(q.name for q in tmp_path.iterdir()) == [G.MODEL_NAME]  # no temporary directory, nothing replaced
+    assert sorted(q.name for q in c.iterdir()) == ["prompt0.npz"] and (c / "prompt0.npz").read_text() == "old"
+    shutil.rmtree(c)  # a first extraction (no cache yet) also goes through a temporary directory
+    calls = []
+    monkeypatch.setattr(G, "_extract_into", _fake_extract(calls))
+    assert G.prepare() == {"new": True} and c.is_dir() and calls[0].name.startswith(f".{G.MODEL_NAME}.tmp-")
+    assert not [q for q in tmp_path.iterdir() if ".tmp-" in q.name or ".replaced-" in q.name]

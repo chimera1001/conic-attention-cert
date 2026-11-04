@@ -159,14 +159,77 @@ def lm_spec(xbar: np.ndarray, g: np.ndarray, eps: float, u1: np.ndarray, u2: np.
     return {"c_m": c_m, "r_bar": r, "grad_exact": grad, "cos_exact": cos}
 
 
+#: the files of a complete cache (``prepare()`` writes all of them; a directory with any other subset is incomplete)
+CACHE_FILES = tuple(f"weights_L{l:02d}.npz" for l in range(N_LAYERS)) + tuple(f"prompt{p}.npz" for p in range(5)) + (
+    "final.npz", "extract.json")
+
+
+def _refuse_symlinks(cache: Path) -> None:
+    """``prepare()`` never writes through a symlink: neither ``cache_dir()`` nor ``model_cache()`` nor an entry of it may be
+    one (a symlinked cache may belong to another project)."""
+    links = [q for q in (cache_dir(), cache) if q.is_symlink()]
+    if cache.is_dir() and not cache.is_symlink():
+        links += [q for q in cache.iterdir() if q.is_symlink()]
+    if links:
+        raise SystemExit(f"gpt-oss cache: {', '.join(str(q) for q in links)} is a symlink; prepare() does not write through "
+                         "symlinks. Point AIMP_CACHE_DIR at a real directory (or at a complete cache, which is only read).")
+
+
 def prepare(force: bool = False, log=print, dtype: str = "float32") -> dict:
-    """Extraction and the checks E1, E3 in one process: load the model, run the five prompts with hooks, cache in float64
-    (``model_cache()``: ``weights_L<ll>.npz`` per layer, ``prompt<p>.npz`` per prompt, ``final.npz``), then free the model.
-    Returns (and writes ``model_cache()/extract.json``) the record with the E1 / E3 rows; raises ``SystemExit`` if a check
-    fails. E1: for every layer and prompt the float64 re-implementation of the attention sublayer from the cached weights and
-    normalized tokens reproduces the model's attention output to 1e-4 relative. E3: the cached final residual, RMSNorm and
-    unembedding reproduce the logits at position 4 to 1e-4 relative, and the frozen-scale margin of the model's own final
-    gain and unembedding rows changes by ``c_m^T delta`` to 1e-6 relative."""
+    """The cache of the gpt-oss units (``model_cache()``: ``weights_L<ll>.npz`` per layer, ``prompt<p>.npz`` per prompt,
+    ``final.npz``, ``extract.json``) and the extraction checks E1 / E3 (:func:`_extract_into`). An existing cache is never
+    overwritten in place:
+
+    * a complete cache (every file of ``CACHE_FILES``) is only read: its ``extract.json`` is returned (also through a
+      symlink, since nothing is written);
+    * otherwise nothing is written through a symlink: a cache directory that is, or contains, a symlink is refused
+      (:func:`_refuse_symlinks`);
+    * an existing incomplete cache (any entry, but not every file) is not re-extracted silently: ``SystemExit`` unless
+      ``force=True`` (``python experiments/gpt_oss.py --force``);
+    * a new extraction is written to a temporary directory next to the cache and moved into place by one ``os.rename``
+      (atomic on one file system) only after its checks passed; with ``force=True`` an existing cache is first renamed to
+      ``<name>.replaced-<time>`` and kept. A failed extraction leaves the cache as it was and removes its temporary
+      directory."""
+    import shutil
+
+    CACHE = model_cache()
+    complete = all((CACHE / f).is_file() for f in CACHE_FILES)
+    if complete and not force:  # read only (also through a symlink)
+        return json.loads((CACHE / "extract.json").read_text())
+    _refuse_symlinks(CACHE)  # everything below may write
+    entries = sorted(q.name for q in CACHE.iterdir()) if CACHE.is_dir() else []
+    if entries and not force:
+        missing = [f for f in CACHE_FILES if not (CACHE / f).is_file()]
+        raise SystemExit(f"gpt-oss cache {CACHE} is incomplete (missing {', '.join(missing[:4])}"
+                         f"{', ...' if len(missing) > 4 else ''}); it is not re-extracted silently. Re-extract with "
+                         "`python experiments/gpt_oss.py --force` (the current directory is kept as "
+                         f"{CACHE.name}.replaced-<time>) or point AIMP_CACHE_DIR elsewhere.")
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CACHE.parent / f".{CACHE.name}.tmp-{os.getpid()}-{time.strftime('%Y%m%d-%H%M%S')}"
+    tmp.mkdir()
+    try:
+        out = _extract_into(tmp, log=log, dtype=dtype)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    if CACHE.exists():
+        old = CACHE.parent / f"{CACHE.name}.replaced-{time.strftime('%Y%m%d-%H%M%S')}"
+        os.rename(CACHE, old)
+        log(f"extract: the previous cache directory is kept as {old}")
+    os.rename(tmp, CACHE)
+    _W.clear(), _P.clear(), _F.clear(), _PROJ.clear()
+    return out
+
+
+def _extract_into(CACHE: Path, log=print, dtype: str = "float32") -> dict:
+    """Extraction and the checks E1, E3 in one process, written into the (new, empty) directory ``CACHE``: load the model,
+    run the five prompts with hooks, cache in float64 (``weights_L<ll>.npz`` per layer, ``prompt<p>.npz`` per prompt,
+    ``final.npz``), then free the model. Returns (and writes ``CACHE/extract.json``) the record with the E1 / E3 rows;
+    raises ``SystemExit`` if a check fails. E1: for every layer and prompt the float64 re-implementation of the attention
+    sublayer from the cached weights and normalized tokens reproduces the model's attention output to 1e-4 relative. E3: the
+    cached final residual, RMSNorm and unembedding reproduce the logits at position 4 to 1e-4 relative, and the frozen-scale
+    margin of the model's own final gain and unembedding rows changes by ``c_m^T delta`` to 1e-6 relative. Called only by
+    :func:`prepare`."""
     import gc
 
     import torch
@@ -174,11 +237,7 @@ def prepare(force: bool = False, log=print, dtype: str = "float32") -> dict:
     from aimp import gpt2
     from aimp.io import env_info, git_commit, jsonable, write_json_atomic
 
-    CACHE = model_cache()
     rec_path = CACHE / "extract.json"
-    if rec_path.exists() and (CACHE / "final.npz").exists() and not force:
-        return json.loads(rec_path.read_text())
-    CACHE.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
     import psutil
 
@@ -197,8 +256,6 @@ def prepare(force: bool = False, log=print, dtype: str = "float32") -> dict:
     # ---- weights per layer (float64; bf16 values on disk, exact in float64)
     for l in range(N_LAYERS):
         p = CACHE / f"weights_L{l:02d}.npz"
-        if p.exists() and not force:
-            continue
         at = layers[l].self_attn
         W = {"Wq": _np(at.q_proj.weight), "bq": _np(at.q_proj.bias), "Wk": _np(at.k_proj.weight), "bk": _np(at.k_proj.bias),
              "Wv": _np(at.v_proj.weight), "bv": _np(at.v_proj.bias), "Wo": _np(at.o_proj.weight), "bo": _np(at.o_proj.bias),
@@ -399,9 +456,12 @@ _F: dict = {}
 
 
 def _need_cache() -> Path:
+    """The cache for the units; never extracts (an extraction is started only by an explicit :func:`prepare`, e.g. by
+    ``experiments/gpt_oss.py`` before its parts)."""
     c = model_cache()
     if not (c / "final.npz").exists():
-        prepare()
+        raise SystemExit(f"gpt-oss cache {c} not found or incomplete: run `python experiments/gpt_oss.py --part calib` (it "
+                         "extracts once) or set AIMP_CACHE_DIR to a complete cache")
     return c
 
 

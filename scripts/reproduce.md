@@ -153,6 +153,10 @@ head, alternating full and sliding-window attention, mixture-of-experts MLPs). E
 | Tables 4–6 analogues: 192 heads (8 per layer, `h in {0, 9, ..., 63}`), five prompts, position 4; fixed query on `R4`, varying query on `R3 = {0.0002, 0.0004, 0.001}`; certificate, first order, Vertex-Softmax, IBP, CROWN, alpha-CROWN | `python experiments/gpt_oss.py --part f v` | `results/gpt_oss/{f,v}/L*/*.json`; `results/gpt_oss/summary/table4.csv`, `table5.csv`, `crown_vs_summary.csv`, `slopes.csv`, `units.csv` |
 | Table 7 analogue: the logit-margin specification on the fixed-query units, `R3` | `python experiments/gpt_oss.py --part l` | `results/gpt_oss/l/L*/*.json`; `results/gpt_oss/summary/lm_summary.csv` |
 
+The extraction never overwrites an existing cache: a complete cache is only read; an incomplete one is an error (re-extract with
+`--force`, which keeps the old directory as `gpt-oss-20b.replaced-<time>`); nothing is written through a symlink; a new
+extraction is written to a temporary directory and renamed into place after its checks passed.
+
 `model="gpt-oss-20b"` of `aimp.gpt2_units.make_instance` builds the units (`aimp/gptoss.py`). The rotary maps act after the
 projection, so the score of key `j` is `(W_Q z_i + b_Q)^T M_j (W_K z_j + b_K)` with `M_j = R_i^T R_j / 8`. They are folded
 into each token's set by an invertible linear map per token (the query block by the query's map, the key block by the

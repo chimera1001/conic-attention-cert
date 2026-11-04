@@ -342,6 +342,8 @@ def main(argv=None) -> None:
     ap.add_argument("--threads-per-solve", type=int, default=1)
     ap.add_argument("--out", type=Path, default=None, help="default results_dir()/gpt_oss (with --quick .../gpt_oss_quick)")
     ap.add_argument("--summarize", action="store_true", help="only summarize the stored records")
+    ap.add_argument("--force", action="store_true", help="re-extract the cache even if one exists (the current directory "
+                    "is kept as <name>.replaced-<time>); without it an incomplete cache is an error, never re-extracted")
     a = ap.parse_args(argv)
     out = a.out or results_dir() / ("gpt_oss_quick" if a.quick else "gpt_oss")
     sample = list(QUICK["heads"]) if a.quick else sample_heads()
@@ -356,7 +358,7 @@ def main(argv=None) -> None:
         if a.workers * a.threads_per_solve > compute.thread_budget():
             raise SystemExit(f"workers x threads = {a.workers * a.threads_per_solve} exceeds AIMP_MAX_THREADS = "
                              f"{compute.thread_budget()}")
-        ex = G.prepare(log=lambda m: _log(out, m))
+        ex = G.prepare(force=a.force, log=lambda m: _log(out, m))
         _log(out, f"gpt-oss extraction checks: E1 {ex['E1_ok']} (worst {ex['E1_worst_rel']:.1e}), E3 logits {ex['E3_logits_ok']} "
                   f"(worst {ex['E3_worst_logits_rel']:.1e}), E3 linear {ex['E3_lin_ok']} (worst {ex['E3_worst_lin_rel']:.1e})")
         if "calib" in a.part:
