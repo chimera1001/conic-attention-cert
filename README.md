@@ -20,7 +20,9 @@ boxes). This repository contains
   worst cases of GPT-2 small heads (`benchmark/`);
 * two extensions of Section 7 that are not in the arXiv version: the Vertex-Softmax baseline (the exact maximum of the
   softmax-weighted support values over the box of certified scores) and a logit-margin specification, in
-  `experiments/jmlr_extensions.py` (see `scripts/reproduce.md`).
+  `experiments/jmlr_extensions.py` (see `scripts/reproduce.md`);
+* a second trained model, gpt-oss-20b (rotary position embeddings, grouped keys and values, attention sinks), with
+  `model="gpt-oss-20b"` of the unit construction and `experiments/gpt_oss.py` (see `scripts/reproduce.md`).
 
 ## Layout
 

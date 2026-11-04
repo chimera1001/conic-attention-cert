@@ -138,6 +138,54 @@ and about 5 hours for the 2,160 varying-query units (median 25 s; re-solves on 4
 `--quick` (two heads, prompt 0; references from the `--quick` runs of the other scripts) takes a few minutes; `--heads`
 and `--prompts` select other units.
 
+## A second trained model: gpt-oss-20b (`experiments/gpt_oss.py`)
+
+The certificates and baselines of Section 7 on `openai/gpt-oss-20b` (24 layers, 64 query heads of dimension 64 per layer,
+8 key-value groups, attention biases, RMSNorm, rotary position embeddings with YaRN scaling, one learned sink logit per
+head, alternating full and sliding-window attention, mixture-of-experts MLPs). Each head reads its tokens through a
+192-dimensional subspace, as in GPT-2 small, so the relaxations have the same size.
+
+| item | command | output |
+|---|---|---|
+| extraction and its checks: E1 (for every layer and prompt, a float64 re-implementation of the attention sublayer from the cached weights and normalized tokens reproduces the model's attention output to 1e-4 relative; the model runs in float32), E3 (the cached final residual, RMSNorm and unembedding reproduce the logits at position 4 to 1e-4 relative; the frozen-scale margin changes by `c_m^T delta` to 1e-6) | any part below (first run) | `cache/gpt-oss-20b/extract.json`, `weights_L*.npz`, `prompt*.npz`, `final.npz` |
+| radius calibration: median secant width of the 192 sampled heads at seven radii; `r0` = largest `rho_rel` with median `w_t <= 0.3` (`r0 = 0.0002`; `w_t` is about 650 x `rho_rel`, against 250 x on GPT-2 small) | `python experiments/gpt_oss.py --part calib` | `results/gpt_oss/calib/*.json`; `results/gpt_oss/summary/calibration.csv` |
+| exact worst cases with a fixed query (Theorem 7) of all 1,536 heads, five prompts, positions 4 and last, `rho_rel` in `R4 = {0.0002, 0.0004, 0.001, 0.002}`; first-order and vertex bounds; benchmark files | `python experiments/gpt_oss.py --part x` | `results/gpt_oss/x/L*/*.json`; `results/gpt_oss/summary/x_summary.csv`, `x_slopes.csv`, `benchmark/units.csv`, `benchmark/angles.csv.gz` |
+| Tables 4–6 analogues: 192 heads (8 per layer, `h in {0, 9, ..., 63}`), five prompts, position 4; fixed query on `R4`, varying query on `R3 = {0.0002, 0.0004, 0.001}`; certificate, first order, Vertex-Softmax, IBP, CROWN, alpha-CROWN | `python experiments/gpt_oss.py --part f v` | `results/gpt_oss/{f,v}/L*/*.json`; `results/gpt_oss/summary/table4.csv`, `table5.csv`, `crown_vs_summary.csv`, `slopes.csv`, `units.csv` |
+| Table 7 analogue: the logit-margin specification on the fixed-query units, `R3` | `python experiments/gpt_oss.py --part l` | `results/gpt_oss/l/L*/*.json`; `results/gpt_oss/summary/lm_summary.csv` |
+
+`model="gpt-oss-20b"` of `aimp.gpt2_units.make_instance` builds the units (`aimp/gptoss.py`). The rotary maps act after the
+projection, so the score of key `j` is `(W_Q z_i + b_Q)^T M_j (W_K z_j + b_K)` with `M_j = R_i^T R_j / 8`. They are folded
+into each token's set by an invertible linear map per token (the query block by the query's map, the key block by the
+token's own). `R_j` is the model's own `apply_rotary_pos_emb` applied to the identity with the model's cos / sin tables,
+which include the YaRN factor. The sink is an extra key with a fixed score and value zero (two constant coordinates are
+appended; the lifted problems keep their size). Every method then sees the per-key matrices without change: the score
+intervals (`aimp.gptoss.score_intervals_roles`, dispatched by `aimp.gpt2.score_intervals_roles`), the first-order and
+vertex bounds, the level-one relaxation and its safe bound, Theorem 7, the multistart and the auto_LiRPA module. In that
+module the rotation is part of each token's fixed input map and the sink's logit is a constant entry of the softmax. Every
+unit checks E2: its instance reproduces the head's nominal pattern (keys and sink), scores and output, computed from the raw
+weights, to `1e-10`. The nominal value range includes the sink's value 0. The window (128) does not bind on the five prompts.
+The logit-margin vector is `c_m = diag(g_f) (u_t1 - u_t2) / r_bar` with the final RMSNorm scale frozen at
+`r_bar = (||xbar||^2 / d + eps)^(1/2)` and the rows `u_t` of the untied unembedding.
+
+For gpt-oss the procedure of Appendix B has one more step (`aimp/option_b.py`). On these heads one key often holds
+almost all of the attention, and the solver then meets the interval diagonal of the other keys only to its feasibility
+tolerance, which the square root in the covariance term amplifies. When the covariance that the residuals of the final solve
+allow exceeds 1% of the certificate's gap, or a theorem check is not satisfied, the relaxation is solved again at the 1e-9
+tolerances on the equivalent formulation with every attention weight divided by its upper bound
+(`solve_sdp1(scale_a=True)`), and the smaller of the two safe values is kept. The theorem checks are classified as satisfied
+(`value - lb <= bound + 1e-6`), unresolved (the excess is within `5e-8 max|h|` plus the safe slack, or within that covariance)
+or violated; a violated check stops the part.
+
+Run time (measured on the workstation of `README.md`, 28 threads): the extraction about 1 minute after the download (85 GB of
+memory, once); `calib` about 1.3 minutes at 10 workers x 1 thread; `x` about 19 worker hours for the 61,440 units (median
+0.36 s per unit at position 4 and 1.9 s at the last position; 10 hours at 2 workers); `f` about 24 worker hours at 4 threads
+per solve for the 3,840 units (median 15 s; the 1e-9 re-solve fires on 10% of them, the rescaled re-solve on 12%, median
+40 s); `v` about 42 worker hours for the 2,880 units (median 38 s; re-solves on 4%, rescaled on 8%, median 105 s); `l` about
+41 worker hours for the 2,880 units (median 42 s; the 1e-9 re-solve fires on 81% of them because the logit-margin gaps are
+small against the solver's absolute accuracy). IBP, CROWN and alpha-CROWN add about 1 s per unit. With 6 workers x 4 threads
+`f`, `v` and `l` take about 5, 6 and 6 hours. `--quick` (two heads, prompt 0, two radii) takes about 4 minutes at 2 x 4
+threads once the cache exists.
+
 ## Benchmark check
 
 ```bash

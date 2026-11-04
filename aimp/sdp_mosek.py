@@ -99,6 +99,74 @@ class ConicModel:
         self.nrows += n
         return len(self.blocks) - 1
 
+    # ---- exact rescaling (the re-solve on the formulation with every attention weight divided by its upper bound)
+    def congruence_scale(self, s: np.ndarray, g_cap: float = 1e4) -> dict:
+        """Exact change of variables ``X = T Xt T`` with ``T = diag(s)``, ``s > 0`` (``Xt`` PSD iff ``X`` is): every coefficient
+        on ``X[k, l]`` (constraints and objective) is multiplied by ``s_k s_l``. Then the rows that the change touched are
+        rescaled by positive factors, which keeps every block's cone: a zero / nonneg row by ``1 / max |coefficient|`` (when that
+        is below 1 and the scaled constant stays within ``g_cap``), a whole soc block by one factor likewise, and an exponential
+        cone ``(x1, 1, x3)`` whose ``x1`` became ``s_k x1'`` by ``(x1 / s_k, 1, x3 - log s_k)`` (``s_k x1' >= e^{x3}`` iff ``x1' >=
+        e^{x3 - log s_k}``). The scalar variables are not changed. Returns counts of the rescaled rows."""
+        s = np.asarray(s, float)
+        if np.any(~(s > 0)):
+            raise ValueError("congruence_scale: s must be positive")
+        cat = lambda a, dt: np.concatenate(a) if a else np.zeros(0, dt)  # noqa: E731
+        r, k, l, v = cat(self._bar[0], np.int64), cat(self._bar[1], np.int64), cat(self._bar[2], np.int64), cat(self._bar[3], float)
+        rs, cs, vs = cat(self._sc[0], np.int64), cat(self._sc[1], np.int64), cat(self._sc[2], float)
+        g = cat(self._g, float).copy()
+        fac = s[k] * s[l]
+        v = v * fac
+        touched = np.zeros(self.nrows, bool)
+        touched[r[fac != 1.0]] = True
+        rowmax = np.zeros(self.nrows)
+        np.maximum.at(rowmax, r, np.abs(v))
+        if rs.size:
+            np.maximum.at(rowmax, rs, np.abs(vs))
+        f = np.ones(self.nrows)
+        shift = np.zeros(self.nrows)
+        info = {"rows_touched": int(touched.sum()), "rows_scaled": 0, "soc_blocks_scaled": 0, "exp_cones_shifted": 0,
+                "rows_left": 0}
+        for b in self.blocks:
+            st, n = b["start"], b["n"]
+            rows = np.arange(st, st + n)
+            if not touched[rows].any():
+                continue
+            if b["kind"] in ("zero", "nonneg"):
+                for row in rows[touched[rows]]:
+                    mx = rowmax[row]
+                    if 0 < mx < 1 and abs(g[row]) / mx <= g_cap * max(1.0, abs(g[row])):
+                        f[row] = 1.0 / mx
+                        info["rows_scaled"] += 1
+                    else:
+                        info["rows_left"] += 1
+            elif b["kind"] == "soc":
+                mx, gb = float(rowmax[rows].max()), float(np.abs(g[rows]).max())
+                if 0 < mx < 1 and gb / mx <= g_cap * max(1.0, gb):
+                    f[rows] = 1.0 / mx
+                    info["soc_blocks_scaled"] += 1
+                else:
+                    info["rows_left"] += n
+            elif b["kind"] == "pexp":
+                x1, x2, x3 = st, st + 1, st + 2
+                in1, in2 = np.flatnonzero(r == x1), np.flatnonzero(r == x2)
+                if (touched[x2] or touched[x3] or in1.size != 1 or in2.size or np.any(rs == x1) or np.any(rs == x2)
+                        or g[x2] != 1.0 or g[x1] != 0.0 or not (v[in1[0]] > 0)):
+                    raise ValueError(f"congruence_scale: exponential cone {b['name']} is not (s x1', 1, x3)")
+                c1 = float(v[in1[0]])
+                f[x1] = 1.0 / c1
+                shift[x3] = -math.log(c1)
+                info["exp_cones_shifted"] += 1
+        v = v * f[r]
+        vs = vs * f[rs] if rs.size else vs
+        g = g * f + shift
+        self._bar = ([r], [k], [l], [v])
+        self._sc = ([rs], [cs], [vs])
+        self._g = [g]
+        if self.obj_bar[0]:
+            ok, ol, ov = (np.concatenate(a) for a in self.obj_bar)
+            self.obj_bar = ([ok], [ol], [ov * s[ok] * s[ol]])
+        return info
+
     # ---- assembled data
     def assemble(self):
         nr = self.nrows
@@ -345,12 +413,15 @@ PHASE3_TOL = {"MSK_DPAR_INTPNT_CO_TOL_PFEAS": 1e-6, "MSK_DPAR_INTPNT_CO_TOL_DFEA
 
 def solve_sdp1(inst: Instance, ctrl: dict, threads: int | None = None, time_limit: float | None = None,
                prune_tol: float | None = 1e-6, cut: str = "B", tol: dict | None = None,
-               keep_X: bool = False) -> SolveResult:
+               keep_X: bool = False, scale_a: bool = False) -> SolveResult:
     """``sdp_1`` (Definition 3: persp + simplex_x_z + interval diagonal; secant on the log-attention intervals (14);
     width-pair cut by default, ``cut="auto"`` the pair with the smaller radius; exp-cone pruning) with
     ``value := value_safe``. Ball / ellipsoid / box / point sets only. ``keep_X``: attach the moment matrix and the
     ``u``-block positions as ``res.X`` / ``res.upos`` (starts of the strong lower bound, :mod:`aimp.lower`), not
-    serialized."""
+    serialized. ``scale_a``: the same relaxation on the equivalent formulation
+    with every attention weight divided by its upper bound ``a_hi_j`` (:meth:`ConicModel.congruence_scale`; the rows ``a_j <= 1``,
+    implied by ``a_j <= a_hi_j <= 1``, are omitted; the safe value is computed on the formulation as passed to the solver, with
+    the a-priori bounds ``D / s^2``; ``res.X`` is mapped back to the original coordinates). Off by default."""
     from aimp.bounds import _quad_objective, choose_cut, t_intervals
     from aimp.heads import forward
     from aimp.relax_sdp import LiftIndex
@@ -447,7 +518,9 @@ def solve_sdp1(inst: Instance, ctrl: dict, threads: int | None = None, time_limi
     # (6) a in [0, 1] ∩ [a_lo, a_hi], sum a = 1
     za = np.zeros(n, int)
     mod.add("nonneg", n, 0.0, bar=(_rows(n), za, pos_a, np.ones(n)), name="a>=0")
-    mod.add("nonneg", n, 1.0, bar=(_rows(n), za, pos_a, -np.ones(n)), name="a<=1")
+    drop_a_le_1 = bool(scale_a and np.all(np.asarray(ctrl["a_hi"], float) <= 1.0))
+    if not drop_a_le_1:  # with scale_a it is implied by a <= a_hi <= 1, and its tiny coefficients garble its multiplier
+        mod.add("nonneg", n, 1.0, bar=(_rows(n), za, pos_a, -np.ones(n)), name="a<=1")
     mod.add("nonneg", n, -np.asarray(ctrl["a_lo"], float), bar=(_rows(n), za, pos_a, np.ones(n)), name="a>=a_lo")
     mod.add("nonneg", n, np.asarray(ctrl["a_hi"], float), bar=(_rows(n), za, pos_a, -np.ones(n)), name="a<=a_hi")
     mod.add("zero", 1, -1.0, bar=(za, za, pos_a, np.ones(n)), name="sum_a")
@@ -516,6 +589,13 @@ def solve_sdp1(inst: Instance, ctrl: dict, threads: int | None = None, time_limi
             name="Xaa>=0")
     t_model = time.perf_counter() - t0
 
+    s_vec, scale_info = None, None
+    if scale_a:
+        s_vec = np.ones(m)
+        for idx in range(n):
+            if a_hi[idx] > 0:
+                s_vec[pos_a[idx]] = float(a_hi[idx])
+        scale_info = mod.congruence_scale(s_vec)
     sol = mod.solve(threads, time_limit, tol)
     # a-priori diagonal bounds (as relax_sdp._safe): balls rho^2 (group budget 1), a_j <= a_hi_j^2
     D = np.zeros(m)
@@ -528,6 +608,8 @@ def solve_sdp1(inst: Instance, ctrl: dict, threads: int | None = None, time_limi
             D[upos[t]] = reps[t].rho ** 2
             groups.append((upos[t].tolist(), 1.0))
     D[pos_a] = a_hi ** 2
+    if s_vec is not None:
+        D = D / s_vec ** 2
     sb = mod.safe_value(sol, D, groups)
     status = sol["status"]
     vs = sb.get("value_safe")
@@ -541,6 +623,8 @@ def solve_sdp1(inst: Instance, ctrl: dict, threads: int | None = None, time_limi
             "num_iters": sol.get("num_iters"), "prosta": sol["prosta"], "solsta": sol["solsta"],
             "nrows": sol["nrows"], "pruned_keys": pruned, "cut_used": cutinfo["cut_used"], "eps": cutinfo["eps"],
             "w_t_used": float(np.max(t_hi - t_lo)), "t_interval": "tight", "solver": "mosek_task"}
+    if s_vec is not None:
+        diag.update({"scale_a": True, "scale_info": {**scale_info, "a_le_1_omitted": drop_a_le_1}})
     pruning_slack = 0.0
     if pruned:
         from aimp.theory import support_values
@@ -554,11 +638,12 @@ def solve_sdp1(inst: Instance, ctrl: dict, threads: int | None = None, time_limi
                       diagnostics=diag,
                       approximations=([] if status == "optimal" else [status]) + ([f"exp_pruned:{len(pruned)}"] if pruned else []))
     if "X" in sol:
-        X = sol["X"]
+        pmv = mod.max_violation(sol)  # on the formulation passed to the solver
+        X = sol["X"] if s_vec is None else sol["X"] * np.outer(s_vec, s_vec)  # original coordinates
         ev = np.linalg.eigvalsh(X)[::-1]
         diag.update({"X_min_eig": float(ev[-1]), "top_eigs": ev[:5].tolist(),
                      "rank1_ratio": float(ev[1] / ev[0]) if ev.size > 1 and ev[0] > 0 else 0.0,
-                     "a": X[0, pos_a].copy(), "primal_max_violation": mod.max_violation(sol)})
+                     "a": X[0, pos_a].copy(), "primal_max_violation": pmv})
         Z = inst.centers().copy()
         for t in inst.tokens:
             if reps[t].r:

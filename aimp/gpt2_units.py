@@ -234,10 +234,19 @@ def head_data(l: int, h: int) -> tuple[dict, object]:
     return C["proj"][(l, h)]
 
 
-def make_instance(l: int, h: int, p: int, pos: int, rho_rel: float, fixed_query: bool = False, spec: str = "a"):
+def make_instance(l: int, h: int, p: int, pos: int, rho_rel: float, fixed_query: bool = False, spec: str = "a",
+                  model: str = "gpt2"):
     """The unit's instance in reduced coordinates, with the specification ``c`` = direction of the nominal head
     output at ``pos`` (``spec="a"``) or the logit-margin specification ``c = -c_m`` of the prompt (``spec="lm"``,
-    position 4 only)."""
+    position 4 only). ``model="gpt-oss-20b"``: the gpt-oss unit of :func:`aimp.gptoss.make_instance` (query head ``h`` of
+    layer ``l``, rotary maps folded into the token sets, the attention sink as a key with a fixed score and value zero);
+    the default ``"gpt2"`` is unchanged."""
+    if model != "gpt2":
+        from aimp import gptoss
+
+        if model != gptoss.MODEL_NAME:
+            raise ValueError(f"unknown model {model!r}")
+        return gptoss.make_instance(l, h, p, pos, rho_rel, spec, fixed_query=fixed_query)
     from aimp import gpt2
 
     hw, pr = head_data(l, h)

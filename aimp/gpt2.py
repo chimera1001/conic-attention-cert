@@ -311,6 +311,10 @@ def score_intervals_roles(inst: Instance, threads=None, method: str = "shor") ->
     from aimp import bounds
     from aimp.sdp_mosek import shor_score  # bounds._shor in the MOSEK task API
 
+    if inst.meta.get("model", "gpt2") != "gpt2":  # gpt-oss: per-token (rotated) shape matrices and the sink
+        from aimp import gptoss
+
+        return gptoss.score_intervals_roles(inst, threads=threads, method=method)
     if method == "cs":
         return bounds.score_intervals(inst, "cs")
     hd = inst.head
