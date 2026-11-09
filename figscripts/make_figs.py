@@ -10,6 +10,7 @@ import os
 HERE=os.path.dirname(os.path.abspath(__file__))
 DATA=os.path.join(HERE,"..","figdata")+os.sep
 OUT=os.path.join(HERE,"..","figs")+os.sep
+os.makedirs(OUT,exist_ok=True)
 C1,C2,C3,C4="#2a78d6","#eb6834","#1baf7a","#eda100"
 INK,INK2,MUTED,GRID,AXIS="#0b0b0b","#52514e","#898781","#e1e0d9","#c3c2b7"
 SEQ=["#cde2fb","#9ec5f4","#6da7ec","#3987e5","#256abf","#184f95","#0d366b"]

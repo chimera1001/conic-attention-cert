@@ -1,8 +1,9 @@
 """Print the statistics quoted in Section 7 that are computed from the shipped figure data.
-Run from figscripts/:  python3 stats.py   (reads ../figdata)."""
+Run from the repository root:  python figscripts/stats.py   (reads figdata/ next to figscripts/)."""
+import os
 import numpy as np, pandas as pd
 from scipy.stats import spearmanr
-D = "../figdata/"
+D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figdata") + os.sep
 def iqr(x):
     x = np.asarray(x, float); x = x[np.isfinite(x)]
     return f"{np.median(x):.3f} [{np.quantile(x,.25):.3f}, {np.quantile(x,.75):.3f}] (n={len(x)})"
