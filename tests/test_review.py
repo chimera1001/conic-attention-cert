@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from tests.test_gpt_oss import syn_cache  # noqa: F401  (the synthetic gpt-oss cache fixture)
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -86,3 +88,34 @@ def test_crown_with_score_intervals_on_a_synthetic_head():
         assert r["runs"][f"plain:{m}"]["ub"] == b["methods"][m]["ub"]
     for k in ("ref:CROWN", "ref:alpha-CROWN", "set:CROWN", "set:alpha-CROWN"):
         assert r["runs"][k]["status"] == "ok" and r["runs"][k]["ub"] >= b["sampled_max"] - 1e-9 * max(1.0, abs(b["sampled_max"]))
+
+
+def test_bound_terms_recomputed_from_a_stored_record(syn_cache, tmp_path):  # noqa: F811
+    """A fixed-query gpt-oss unit (synthetic weights) stored with the fields of part f, its terms of bound (39) from the
+    pipeline's own call (:func:`aimp.pipeline.collapse_fields`): recomputed from the stored intervals they are the same."""
+    import json
+
+    from aimp import gpt2_units as U
+    from aimp import pipeline
+    from aimp.io import jsonable
+    from aimp.theory import nominal_decomposition
+
+    T4 = _load("review_bound_terms")
+    l, h, p, rho = 0, 9, 1, 2e-2
+    xr = pipeline.evaluate_fq_exact(l, h, p, 4, rho, model="gpt-oss-20b")
+    fq = U.make_instance(l, h, p, 4, rho, fixed_query=True, model="gpt-oss-20b")
+    si, ctrl = pipeline.controls(fq, 1)
+    eta = float(nominal_decomposition(fq)["eta"])
+    cf = pipeline.collapse_fields(fq, ctrl, phi_min_strong=xr["min_fq"], eta=eta, pruning_slack=0.0)
+    rec = {**xr, **{k: v for k, v in cf.items() if k != "perkey"}, "a_lo": ctrl["a_lo"], "a_hi": ctrl["a_hi"],
+           "F0_eta": eta, "pruning_slack": 0.0, "phi_min_strong": xr["min_fq"], "cert": xr["p_fq_hi"], "theta": None,
+           "range_no_sink": 0.0, "pruned_keys": []}
+    f = tmp_path / "gpt_oss" / "f" / "L00" / f"{U.unit_name(l, h, p, 4, rho)}.json"
+    f.parent.mkdir(parents=True)
+    f.write_text(json.dumps(jsonable(rec)))
+    r = T4.evaluate("F", f, tmp_path)
+    num = {k: v for k, v in r["deviation_stored_vs_recomputed"].items() if k != "budget_binds"}
+    assert max(num.values()) <= 1e-12 * max(1.0, abs(rec["bound_F0v_final"]))
+    assert r["deviation_stored_vs_recomputed"]["budget_binds"] is False
+    assert r["bound_holds"] and r["F0vf_term_knapsack"] > 0
+    assert max(r["checks"][k] for k in ("d_a_lo", "d_a_hi", "d_rad_c", "d_eta_vs_F0_eta")) <= 1e-12
