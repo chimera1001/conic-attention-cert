@@ -22,13 +22,13 @@ def sp(col):
 print(f"units: {len(B)} (S<1: {lo.sum()}, S>=1: {(~lo).sum()})")
 print("Spearman(gap, S) all:", f"{spearmanr(B.gap, B.S).statistic:.2f}")
 
-print("Spearman(gap, knapsack term of bound (39)) all / S<1 / S>=1:", sp("F0vf_term_knapsack"))
+print("Spearman(gap, knapsack term of bound (25)) all / S<1 / S>=1:", sp("F0vf_term_knapsack"))
 r = B.gap / B.bound_F0v_final
-print(f"gap / bound (39): median {r.median():.3f}, max {r.max():.3f}")
+print(f"gap / bound (25): median {r.median():.3f}, max {r.max():.3f}")
 print(f"share of units below the diagonal of Figure 3 (gap < knapsack term): {(B.gap < B.F0vf_term_knapsack).mean():.3f}")
 T = B[["F0vf_term_knapsack", "F0vf_term_eta", "F0vf_term_cov"]]
 for c in T.columns:
-    print(f"median share of {c} in bound (39): {(B[c] / B.bound_F0v_final).median():.3f}")
+    print(f"median share of {c} in bound (25): {(B[c] / B.bound_F0v_final).median():.3f}")
 print(f"knapsack term is the largest of the three: {(T.idxmax(axis=1) == 'F0vf_term_knapsack').mean():.3f}")
 print(f"gap below knapsack + eta terms: {(B.gap < B.F0vf_term_knapsack + B.F0vf_term_eta).mean():.3f}")
 
@@ -47,7 +47,7 @@ print(f"predicted looseness: median {x.median():.0f} ({x.min():.0f} to {x.max():
 print(f"effective rank: median {M.eff_rank_p.median():.1f} ({M.eff_rank_p.min():.1f} to {M.eff_rank_p.max():.1f})")
 print(f"per-neuron sum / half trace: median {(M.P_T_p_complex/M.half_trace_p).median():.1f}")
 
-# Phase 9 (review): curvature certificate, score-interval ablation, terms of (39) on gpt-oss-20b
+# Phase 9 (review): curvature certificate, score-interval ablation, terms of (25) on gpt-oss-20b
 T = pd.read_csv(D + "P9a_taylor_fixed_query.csv")
 T["ratio"] = (T.r_T - T.p_star) / (T.cert - T.p_star)
 print(f"curvature certificate valid on every unit: {(T.r_T >= T.p_star_hi).all()}")
