@@ -119,3 +119,15 @@ def test_bound_terms_recomputed_from_a_stored_record(syn_cache, tmp_path):  # no
     assert r["deviation_stored_vs_recomputed"]["budget_binds"] is False
     assert r["bound_holds"] and r["F0vf_term_knapsack"] > 0
     assert max(r["checks"][k] for k in ("d_a_lo", "d_a_hi", "d_rad_c", "d_eta_vs_F0_eta")) <= 1e-12
+
+
+def test_summary_columns_are_those_of_the_figure_data():
+    import pandas as pd
+
+    S = _load("review_summary")
+    for name, cols in (("P9a_taylor_fixed_query", S.P9A_COLS), ("P9b_crown_sdp_intervals", S.P9B_COLS),
+                       ("P9c_gptoss_bound_terms", S.P4A_COLS), ("P9d_gpt2_margin_exceptions", S.T5_COLS),
+                       ("P4a_bound_terms", S.P4A_COLS)):
+        assert list(pd.read_csv(ROOT / "figdata" / f"{name}.csv", nrows=0).columns) == cols, name
+    assert S.small_slope([0.002, 0.005, 0.01], [4e-6, 2.5e-5, 1e-4]) == pytest.approx(2.0)
+    assert S.ls_slope([0.001, 0.002, 0.004], [1e-6, 4e-6, 1.6e-5]) == pytest.approx(2.0)
