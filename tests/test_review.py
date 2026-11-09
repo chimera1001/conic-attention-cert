@@ -1,0 +1,70 @@
+"""The review computations of ``experiments/review_*.py`` on small instances (synthetic heads and the synthetic gpt-oss
+cache)."""
+from __future__ import annotations
+
+import importlib.util
+import math
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load(name: str):
+    import sys
+
+    for p in (ROOT, ROOT / "experiments"):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    spec = importlib.util.spec_from_file_location(name, ROOT / "experiments" / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_unit_names_parse():
+    C = _load("review_common")
+    assert C.parse(Path("L01H03_P0_i04_r0.002_fq.json")) == (1, 3, 0, 4, 0.002)
+    assert C.parse(Path("L23H63_P4_i21_r0.0002.json")) == (23, 63, 4, 21, 0.0002)
+    with pytest.raises(ValueError):
+        C.parse(Path("x.json"))
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_taylor_certificate_is_valid_and_second_order(seed):
+    """On random fixed-query heads with balls: ``r_T`` is above the exact maximum (Theorem 7), the gradient is
+    :func:`aimp.heads.grad_phi`'s, ``|phi''|`` stays below ``2 rad_c Delta_s^2 + 2 Delta_s nu_c`` along random segments
+    from ``zbar``, and the gap of ``r_T`` is of second order in the radius."""
+    from aimp import instances
+    from aimp.exact_fq import exact_fq, fix_query
+    from aimp.heads import grad_phi, softmax
+
+    T1 = _load("review_taylor")
+    gaps = []
+    for rho in (0.01, 0.02):
+        inst = fix_query(instances.f_random(seed, d=6, d_k=3, d_v=3, n=4, rho=rho, query_in_keys=False))
+        T = T1.taylor(inst)
+        ex = exact_fq(inst)
+        assert ex["status"] == "exact" and T["r_T"] >= ex["p_fq_hi"]
+        _, G = grad_phi(inst, inst.centers())
+        for j, (B, b, g, grad, r) in T["_B"].items():
+            assert np.allclose(B.T @ G[j], grad, rtol=1e-9, atol=1e-12)
+        bound2 = 2 * T["rad_c"] * T["Delta_s"] ** 2 + 2 * T["Delta_s"] * T["nu_c"]
+        rng = np.random.default_rng(seed)
+        for _ in range(20):
+            sig, gam = np.zeros(T["n"]), np.zeros(T["n"])
+            for k, j in enumerate(inst.keys):
+                if j in T["_B"]:
+                    B, b, g, grad, r = T["_B"][j]
+                    v = rng.standard_normal(B.shape[1])
+                    v *= r / np.linalg.norm(v)
+                    sig[k], gam[k] = b @ v, g @ v
+            for tt in np.linspace(0, 1, 11):
+                a = softmax(T["s_nom"] + tt * sig)
+                sb = a @ sig
+                d2 = a @ (((sig - sb) ** 2 - a @ (sig - sb) ** 2) * (T["h_nom"] + tt * gam)) + 2 * a @ ((sig - sb) * gam)
+                assert abs(d2) <= bound2 * (1 + 1e-12)
+        gaps.append(T["r_T"] - 0.5 * (ex["p_fq_lo"] + ex["p_fq_hi"]))
+    assert 1.6 < math.log(gaps[1] / gaps[0]) / math.log(2.0) < 2.4
