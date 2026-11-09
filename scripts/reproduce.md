@@ -1,12 +1,15 @@
 # Reproducing Section 7 and Appendix B
 
+Tables, figures and sections are numbered as in the journal version of the paper, which this branch (`jmlr`)
+follows (the branch `main` follows the arXiv version, whose Tables 3–6 are Tables 4–7 here).
+
 All commands run from the repository root with the interpreter of your environment (`python` below). Results go to
 `$AIMP_RESULTS_DIR` (default `./results`). Every script is resumable (finished units are skipped) and takes
 `--workers` and `--threads-per-solve` (`workers x threads <= AIMP_MAX_THREADS`). Run times are those measured for the
 paper on the workstation described in `README.md`; `--quick` versions run in minutes.
 
 The figure data of the paper are in `figdata/`; `python figscripts/stats.py` prints the numbers computed from them and
-`python figscripts/make_figs.py` redraws the five figures into `figs/`. The experiments write CSV files with the same
+`python figscripts/make_figs.py` redraws the six figures into `figs/`. The experiments write CSV files with the same
 columns, so a rerun can replace the files in `figdata/`.
 
 ## GPT-2 setup (all GPT-2 experiments)
@@ -19,7 +22,7 @@ model to `1e-10` (worst deviations 3.6e-15 for the normalized tokens and attenti
 
 | paper item | command | output |
 |---|---|---|
-| Figure 1 and Table 3 (slopes of the gap in rho on rho <= 0.1: interval pattern bounds, first order, level one with the unit diagonal, level one), "boxes give the same picture" | `python experiments/synthetic.py --part slopes --t-interval loose` then `--part summary` | `results/synthetic/slopes/<family>/<instance>/*.json`; `results/synthetic/summary/table3_slopes.csv`, `results/synthetic/summary/P1_gap_vs_rho.csv` (the format of `figdata/P1_gap_vs_rho.csv`) |
+| Section 7.1: Figure 1 and Table 4 (slopes of the gap in rho on rho <= 0.1: interval pattern bounds, first order, level one with the unit diagonal, level one), "boxes give the same picture" | `python experiments/synthetic.py --part slopes --t-interval loose` then `--part summary` | `results/synthetic/slopes/<family>/<instance>/*.json`; `results/synthetic/summary/table3_slopes.csv`, `results/synthetic/summary/P1_gap_vs_rho.csv` (the format of `figdata/P1_gap_vs_rho.csv`) |
 | interval pattern bounds 9.5 to 28 times looser than the level-one certificate, depending on the family and the number of keys | `python experiments/synthetic.py --part summary` | `results/synthetic/summary/interval_pattern_ratio.csv` |
 | the minimum of the two certificates (Definition 4) costs a median 0.2 s per synthetic instance | `python experiments/synthetic.py --part summary` | `results/synthetic/summary/min_of_two.csv` (column `cost_s`) |
 | level one 125 / 6 / 1.6 times tighter than first order at w_t = 0.05 / 1 / 8; half of the seeds have a dominant key at every width, and its certified weight exceeds 0.9 on all five from w_t = 12 | `python experiments/synthetic.py --part width` then `--part summary` | `results/synthetic/width/...`, `results/synthetic/summary/width.csv` (columns `margin_share`, `dominant_key_share`) |
@@ -34,9 +37,9 @@ seeds 5–9, both query modes). They are not among the paper's instances, so `sy
 above). For 40 of the 8,100 instances (the same F_rank1 configurations, seeds 0–4) the stored records of the paper have
 no exact solve, and their reference there was the best feasible value; the release runs the exact solve on all of them.
 
-As the paper states, Figure 1 and Table 3 used the wider log-attention intervals `[s_lo - tau_hi, s_hi - tau_lo]` and the
+As the paper states, Figure 1 and Table 4 used the wider log-attention intervals `[s_lo - tau_hi, s_hi - tau_lo]` and the
 solver's primal value, which is within 4e-8 of the safe value. `--t-interval loose` reproduces them: stored instances
-rerun with it agree to 3e-8, and the summary reproduces Table 3 and `figdata/P1_gap_vs_rho.csv` exactly from those
+rerun with it agree to 3e-8, and the summary reproduces Table 4 and `figdata/P1_gap_vs_rho.csv` exactly from those
 records. `--t-interval tight` (the default) is the relaxation of Definition 3 with the intervals of equation (14). It
 reports the certified dual value or the safe dual bound and gives the same slopes (quick run: 2.03 / 2.01 for the level
 one, about 1 for the others). With it the level-one gaps are smaller (a median 0.35 times those with the wider
@@ -53,7 +56,7 @@ of the two certificates is within 1.2 of the best of the methods run (which incl
 
 | paper item | command | output |
 |---|---|---|
-| Table 4; w_t ~ 270 rho_rel; 94% of units with 1 <= w_t <= 8 at 0.01; 2 units with a certified dominant key; certificate strictly tighter than first order on 99.5%, median factor 2 | `python experiments/gpt2_ladder.py --part units` then `--part summary` | `results/gpt2_ladder/units/L*/*.json`; table printed |
+| Section 7.2: Table 5; w_t ~ 270 rho_rel; 94% of units with 1 <= w_t <= 8 at 0.01; 2 units with a certified dominant key; certificate strictly tighter than first order on 99.5%, median factor 2 | `python experiments/gpt2_ladder.py --part units` then `--part summary` | `results/gpt2_ladder/units/L*/*.json`; table printed |
 | Figure 2 (left and right); ladder slopes 2.04 / 1.06 / 1.00 over 716 / 720 / 720 units; consecutive-radius slopes (1.83 at 0.01–0.02) | `python experiments/gpt2_ladder.py --part summary` | `results/gpt2_ladder/ladder.csv` (columns of `figdata/P3b_ladder.csv`) |
 | tightness-radius exponents 0.52 / 0.87 | `python experiments/gpt2_ladder.py --part radius` (needs `units`) | `results/gpt2_ladder/radius/*.json`; printed by `--part summary` |
 | stronger ascents: <= 1.4e-9 of the spread | `python experiments/gpt2_ladder.py --part ascent` (needs `units`) | `results/gpt2_ladder/ascent/*.json`; printed by `--part summary` |
@@ -68,7 +71,7 @@ tightness radii about 5 hours; alternating ascent about 30 minutes on 2 threads.
 
 | paper item | command | output |
 |---|---|---|
-| Figure 3; rank correlations 0.76 (S), 0.91 (value-weighted slack), 0.93 / 0.99 / 0.74 (knapsack term of (39)); gap 21% (median) and 56% (max) of bound (39); 97% of units below the diagonal | `python experiments/collapse.py` (after `gpt2_ladder.py --part units`) | `results/collapse/collapse_points.csv` (columns of `figdata/P3c_collapse_points.csv`), `results/collapse/bound_terms.csv` (columns of `figdata/P4a_bound_terms.csv`) |
+| Figure 3 (left: the weighted secant slack S; right: the knapsack term of bound (39)); rank correlations 0.76 (S) and 0.93 / 0.99 / 0.74 (knapsack term; all units / S < 1 / S >= 1); gap 21% (median) and 56% (max) of bound (39); the gap below the knapsack term on 97% of the units; shares of the three terms of (39): knapsack term largest on 78% (median share 64%), covariance term 21%, eta term 10%, the gap below the first two terms on every unit (`python figscripts/stats.py` prints them from `figdata/P4a_bound_terms.csv`) | `python experiments/collapse.py` (after `gpt2_ladder.py --part units`) | `results/collapse/collapse_points.csv` (columns of `figdata/P3c_collapse_points.csv`), `results/collapse/bound_terms.csv` (columns of `figdata/P4a_bound_terms.csv`) |
 
 Seconds. `--quick` reads the records of `gpt2_ladder.py --quick`.
 
@@ -78,7 +81,7 @@ Seconds. `--quick` reads the records of `gpt2_ladder.py --quick`.
 |---|---|---|
 | 17,280 units solved exactly, with certified brackets narrower than 1e-10 of the nominal spread of the values (a median 6e-10 of the range of motion) | `python experiments/exact_fixed_query.py --part exact` | `results/exact_fixed_query/exact/L*/*_fq.json` |
 | the benchmark | `python experiments/exact_fixed_query.py --part benchmark` | `benchmark/units.csv`, `benchmark/angles.csv.gz` |
-| Table 5 (2,880 units at position 4); slopes 2.04 / 1.04 / 1.00 between 0.002 and 0.005; gap <= 0.78 of bound (39); multistart finds the exact worst case to 1e-9 of the nominal spread | `python experiments/exact_fixed_query.py --part sdp` then `--part summary` | `results/exact_fixed_query/sdp/L*/*_fq.json`; table printed |
+| Table 6 (2,880 units at position 4); slopes 2.04 / 1.04 / 1.00 between 0.002 and 0.005; gap <= 0.78 of bound (39); multistart finds the exact worst case to 1e-9 of the nominal spread | `python experiments/exact_fixed_query.py --part sdp` then `--part summary` | `results/exact_fixed_query/sdp/L*/*_fq.json`; table printed |
 | secant width with a varying query: a median 2.36 to 2.42 times that with a fixed query, depending on the radius | `python experiments/exact_fixed_query.py --part summary` (needs `gpt2_ladder.py --part units`) | printed |
 
 Run time: `exact` about 25 minutes at 4 workers x 1 thread (median 0.13 s per unit for the exact solve); `sdp` about 3.5
@@ -88,7 +91,7 @@ hours at 3 x 4 threads. `--quick`: 2 heads x 1 prompt (48 exact units, 4 certifi
 
 | paper item | command | output |
 |---|---|---|
-| Table 6 and Figure 4 (IBP, CROWN, alpha-CROWN, first order and certificate on the same 5,760 units; ratio columns) | `python experiments/bound_propagation.py --part D` (references: `exact_fixed_query.py --part exact sdp` and `gpt2_ladder.py --part units`) | `results/bound_propagation/bounds/{fq,free}/L*/*.json`; `crown_summary.csv` (columns of `figdata/P4b_crown_summary.csv`), `crown_units.csv`, `crown_slopes.csv`, `crown_missing.csv` |
+| Table 7 and Figure 4, top (IBP, CROWN, alpha-CROWN, first order and certificate on the same 5,760 units; ratio columns) | `python experiments/bound_propagation.py --part D` (references: `exact_fixed_query.py --part exact sdp` and `gpt2_ladder.py --part units`) | `results/bound_propagation/bounds/{fq,free}/L*/*.json`; `crown_summary.csv` (columns of `figdata/P4b_crown_summary.csv`), `crown_units.csv`, `crown_slopes.csv`, `crown_missing.csv` |
 | slopes 2.11 (fixed) / 2.39 (varying) vs 2.05 for the certificate; certificate tighter on 5,760 / 5,760 units, by >= 2x on 96%; 0.01–0.02 s (CROWN), 0.2–0.7 s (alpha-CROWN) | `python experiments/bound_propagation.py --summarize` | printed; `crown_slopes.csv` |
 | 20–500 alpha-CROWN iterations at two learning rates move the median ratio by < 0.1% (1,152 units of prompt 0) | `python experiments/bound_propagation.py --part alpha` | `results/bound_propagation/alpha_settings/...`, `alpha_settings.csv`, `alpha_settings_summary.csv` |
 
@@ -112,12 +115,14 @@ rho_rel 0.0005, heads 0–2, about 4 minutes.
 
 ## Extensions: Vertex-Softmax baseline and logit-margin specification (`experiments/jmlr_extensions.py`)
 
-These two comparisons extend Section 7; they are not in the arXiv version of the paper.
+These two comparisons are part of the journal version (they are not in the arXiv version): the vertex-bound columns of
+Table 7 and Figure 4 (top), the logit-margin specification in Table 8 and Figure 4 (bottom), and the vertex bound on
+synthetic heads in Section 7.1.
 
 | item | command | output |
 |---|---|---|
-| Vertex-Softmax bound `r_VS` (the exact maximum of `sum_j softmax(s)_j h_j^max` over the box of certified scores, at the threshold vertices of the remark on scores in a box) on the 5,760 units of Table 6, with the Table 6 columns: median relative gap, median ratio `(r_VS - ref) / (cert - ref)`, per-unit slopes, the share of units with `cert < r_VS`, the part of the first-order gap that it removes | `python experiments/jmlr_extensions.py --part vs-gpt2` (references: `exact_fixed_query.py --part exact sdp`, `gpt2_ladder.py --part units`, `bound_propagation.py --part D`) | `results/jmlr/vs_gpt2/{fq,free}/L*/*.json`; `results/jmlr/summary/crown_vs_summary.csv` (the columns of `figdata/P4b_crown_summary.csv` plus `VS_median, VS_q25, VS_q75, VS_n, VS_ratio_to_cert_median, VS_time_median_s, VS_invalid`), `vs_gpt2_units.csv`, `vs_gpt2_slopes.csv`, `vs_gpt2_shares.csv` |
-| `r_VS` on the synthetic instances: a Table 3 row (with two keys `r_VS = r_pp` exactly, since the softmax image of a score box is the whole segment), per family and number of keys the ratio of its gap to the level-one and first-order gaps, its ratio to the level-one gap across the secant widths | `python experiments/jmlr_extensions.py --part vs-synthetic` (after `synthetic.py --part slopes width`) | `results/jmlr/vs_synthetic/...`; `results/jmlr/summary/vs_table3.csv`, `vs_ratios.csv`, `vs_width.csv`, `vs_gap_vs_rho.csv` (the format of `figdata/P1_gap_vs_rho.csv`, `method = vs`) |
+| Vertex-Softmax bound `r_VS` (the exact maximum of `sum_j softmax(s)_j h_j^max` over the box of certified scores, at the threshold vertices of the remark on scores in a box) on the 5,760 units of Table 7, with the Table 7 columns: median relative gap, median ratio `(r_VS - ref) / (cert - ref)`, per-unit slopes, the share of units with `cert < r_VS`, the part of the first-order gap that it removes | `python experiments/jmlr_extensions.py --part vs-gpt2` (references: `exact_fixed_query.py --part exact sdp`, `gpt2_ladder.py --part units`, `bound_propagation.py --part D`) | `results/jmlr/vs_gpt2/{fq,free}/L*/*.json`; `results/jmlr/summary/crown_vs_summary.csv` (the columns of `figdata/P4b_crown_summary.csv` plus `VS_median, VS_q25, VS_q75, VS_n, VS_ratio_to_cert_median, VS_time_median_s, VS_invalid`), `vs_gpt2_units.csv`, `vs_gpt2_slopes.csv`, `vs_gpt2_shares.csv` |
+| `r_VS` on the synthetic instances: a row of Table 4 (with two keys `r_VS = r_pp` exactly, since the softmax image of a score box is the whole segment), per family and number of keys the ratio of its gap to the level-one and first-order gaps, its ratio to the level-one gap across the secant widths | `python experiments/jmlr_extensions.py --part vs-synthetic` (after `synthetic.py --part slopes width`) | `results/jmlr/vs_synthetic/...`; `results/jmlr/summary/vs_table3.csv`, `vs_ratios.csv`, `vs_width.csv`, `vs_gap_vs_rho.csv` (the format of `figdata/P1_gap_vs_rho.csv`, `method = vs`) |
 | the logit-margin specification: `c = -c_m`, `c_m = P diag(g) (w_t1 - w_t2) / sigma_bar` (the head's direct contribution to the margin between the model's two top next-token logits at position 4, the scale of the final normalization frozen); 144 heads x 5 prompts x rho_rel {0.002, 0.005, 0.01}, fixed query (exact maximum and minimum, certificate) and varying query (certificate, best feasible values), with IBP, CROWN, alpha-CROWN, `r_VS` and the first-order certificate | `python experiments/jmlr_extensions.py --part lm` | `cache/lm_spec.npz`, `cache/lm_gate.json` (the checks of the specification); `results/jmlr/lm/{fq,free}/L*/*.json`; `results/jmlr/summary/lm_summary.csv` (format of `crown_vs_summary.csv`), `lm_units.csv`, `lm_slopes.csv`, `lm_shares.csv`, `lm_decrease.csv` |
 
 `spec="lm"` of `aimp.gpt2_units.make_instance` builds the logit-margin units; `aimp.gpt2_units.prepare_lm` computes `c_m`
@@ -138,7 +143,7 @@ and about 5 hours for the 2,160 varying-query units (median 25 s; re-solves on 4
 `--quick` (two heads, prompt 0; references from the `--quick` runs of the other scripts) takes a few minutes; `--heads`
 and `--prompts` select other units.
 
-## A second trained model: gpt-oss-20b (`experiments/gpt_oss.py`)
+## Section 7.3: a second trained model, gpt-oss-20b (`experiments/gpt_oss.py`)
 
 The certificates and baselines of Section 7 on `openai/gpt-oss-20b` (24 layers, 64 query heads of dimension 64 per layer,
 8 key-value groups, attention biases, RMSNorm, rotary position embeddings with YaRN scaling, one learned sink logit per
@@ -149,9 +154,11 @@ head, alternating full and sliding-window attention, mixture-of-experts MLPs). E
 |---|---|---|
 | extraction and its checks: E1 (for every layer and prompt, a float64 re-implementation of the attention sublayer from the cached weights and normalized tokens reproduces the model's attention output to 1e-4 relative; the model runs in float32), E3 (the cached final residual, RMSNorm and unembedding reproduce the logits at position 4 to 1e-4 relative; the frozen-scale margin changes by `c_m^T delta` to 1e-6) | any part below (first run) | `cache/gpt-oss-20b/extract.json`, `weights_L*.npz`, `prompt*.npz`, `final.npz` |
 | radius calibration: median secant width of the 192 sampled heads at seven radii; `r0` = largest `rho_rel` with median `w_t <= 0.3` (`r0 = 0.0002`; `w_t` is about 650 x `rho_rel`, against 250 x on GPT-2 small) | `python experiments/gpt_oss.py --part calib` | `results/gpt_oss/calib/*.json`; `results/gpt_oss/summary/calibration.csv` |
-| exact worst cases with a fixed query (Theorem 7) of all 1,536 heads, five prompts, positions 4 and last, `rho_rel` in `R4 = {0.0002, 0.0004, 0.001, 0.002}`; first-order and vertex bounds; benchmark files | `python experiments/gpt_oss.py --part x` | `results/gpt_oss/x/L*/*.json`; `results/gpt_oss/summary/x_summary.csv`, `x_slopes.csv`, `benchmark/units.csv`, `benchmark/angles.csv.gz` |
-| Tables 4–6 analogues: 192 heads (8 per layer, `h in {0, 9, ..., 63}`), five prompts, position 4; fixed query on `R4`, varying query on `R3 = {0.0002, 0.0004, 0.001}`; certificate, first order, Vertex-Softmax, IBP, CROWN, alpha-CROWN | `python experiments/gpt_oss.py --part f v` | `results/gpt_oss/{f,v}/L*/*.json`; `results/gpt_oss/summary/table4.csv`, `table5.csv`, `crown_vs_summary.csv`, `slopes.csv`, `units.csv` |
-| Table 7 analogue: the logit-margin specification on the fixed-query units, `R3` | `python experiments/gpt_oss.py --part l` | `results/gpt_oss/l/L*/*.json`; `results/gpt_oss/summary/lm_summary.csv` |
+| exact worst cases with a fixed query (Theorem 7) of all 1,536 heads, five prompts, positions 4 and last, `rho_rel` in `R4 = {0.0002, 0.0004, 0.001, 0.002}`; first-order and vertex bounds (Table 9 and Section 7.3) | `python experiments/gpt_oss.py --part x` | `results/gpt_oss/x/L*/*.json`; `results/gpt_oss/summary/x_summary.csv` (columns of `figdata/P8_x_summary.csv`), `x_slopes.csv` |
+| the benchmark of gpt-oss-20b | `python experiments/gpt_oss.py --benchmark` (after `--part x`) | `benchmark/gpt-oss-20b/units.csv`, `angles.csv.gz`, `prompts.txt` |
+| Table 9 and Table 10 (head's output): 192 heads (8 per layer, `h in {0, 9, ..., 63}`), five prompts, position 4; fixed query on `R4`, varying query on `R3 = {0.0002, 0.0004, 0.001}`; certificate, first order, Vertex-Softmax, IBP, CROWN, alpha-CROWN | `python experiments/gpt_oss.py --part f v` | `results/gpt_oss/{f,v}/L*/*.json`; `results/gpt_oss/summary/table4.csv`, `table5.csv`, `crown_vs_summary.csv` (`figdata/P8_crown_vs_summary.csv`), `slopes.csv`, `units.csv` |
+| Figure 6: relative gaps of both models in bins of the secant width | `python experiments/gpt_oss.py --summarize` (needs `jmlr_extensions.py --part vs-gpt2`) | `results/gpt_oss/summary/gpt2_compare.csv` (`figdata/P8_gpt2_compare.csv`) |
+| Table 10 (logit margin): the logit-margin specification on the fixed-query units, `R3` | `python experiments/gpt_oss.py --part l` | `results/gpt_oss/l/L*/*.json`; `results/gpt_oss/summary/lm_summary.csv` (`figdata/P8_lm_summary.csv`) |
 
 The extraction never overwrites an existing cache: a complete cache is only read; an incomplete one is an error (re-extract with
 `--force`, which keeps the old directory as `gpt-oss-20b.replaced-<time>`); nothing is written through a symlink; a new
@@ -190,12 +197,39 @@ small against the solver's absolute accuracy). IBP, CROWN and alpha-CROWN add ab
 `f`, `v` and `l` take about 5, 6 and 6 hours. `--quick` (two heads, prompt 0, two radii) takes about 4 minutes at 2 x 4
 threads once the cache exists.
 
+## Computations added for the review (`experiments/review_*.py`)
+
+These read the stored records of the scripts above (`--refs`, default `$AIMP_RESULTS_DIR`; with `--quick` the records of
+their `--quick` runs), never write there, and write one JSON per unit under `$AIMP_RESULTS_DIR/review/<task>/`.
+
+| paper item | command | output |
+|---|---|---|
+| Sections 7.2 and 7.3, Table 3 ("the constant, not the order, sets the accuracy"): the curvature (Taylor) certificate `r_T = phi(zbar) + sum_j rho_j ||grad_j phi|| + rad_c Delta_s^2 + Delta_s nu_c` with a fixed query on 11,760 units (GPT-2 along the head's output 2,880 and along the logit margin 2,160; gpt-oss-20b 3,840 and 2,880): valid on every unit, median per-series slope 2.02 (GPT-2, two smallest radii); its gap a median 33–36 (GPT-2, output), 54–74 (GPT-2, margin), 75–79 and 120–139 (gpt-oss-20b) times the certificate's, at least 4.7 times on every unit; at rho_rel 0.002 above the first-order certificate on 46% of the GPT-2 output units, at 0.02 above the whole range of motion on 77% | `python experiments/review_taylor.py --workers 12` (`--selftest` checks the gradient, the curvature bound along random segments and `r_T >= phi` at their ends; needs `exact_fixed_query.py --part sdp`, `jmlr_extensions.py --part lm`, `gpt_oss.py --part f l`) | `results/review/taylor/<set>/L*/*.json`; `summary/taylor_fixed_query.csv`, `summary/P9a_taylor_fixed_query.csv` |
+| Section 7.2: CROWN and alpha-CROWN on the 2,880 varying-query units of Table 7 with the certificate's semidefinite score intervals as bounds on the scores: median ratios to the certificate's gap 7.1 to 9.0 (CROWN) and 6.2 to 7.5 (alpha-CROWN), against 7.8 to 22.2 and 6.7 to 17.5 without; the certificate tighter on every unit, by at least 3.4 | `python experiments/review_crown_intervals.py --workers 12` (needs `bound_propagation.py --part D`, `gpt2_ladder.py --part units`) | `results/review/crown_intervals/L*/*.json`; `summary/crown_sdp_intervals.csv`, `summary/P9b_crown_sdp_intervals.csv` |
+| Section 7.3: the three terms of bound (39) on the 6,720 gpt-oss-20b units of parts f and v (the knapsack term the largest on 58% / 70%, the gap below the first two terms on 97% / 100%, rank correlations of the gap with the knapsack term 0.95 / 0.96 and with S 0.73 / 0.59, gap / bound median 0.17 / 0.27, max 0.62 / 0.68; the bound holds on every unit); part v from its stored intervals, no semidefinite solve | `python experiments/review_bound_terms.py --workers 12` (needs `gpt_oss.py --part f v`) | `results/review/bound_terms/{F,V}/L*/*.json`; `summary/gptoss_bound_terms.csv`, `summary/P9c_gptoss_bound_terms.csv` (columns of `figdata/P4a_bound_terms.csv`) |
+| Section 7.2: the 13 GPT-2 logit-margin units on which the best of IBP, CROWN and alpha-CROWN is not looser than the certificate (7 ties below 3e-7 logits; 6 in blocks 8 and 9, 1.01–1.25 times bound propagation's gap), read through bound (39) | `python experiments/review_margin_exceptions.py` (needs `jmlr_extensions.py --part lm`; repeats the re-solve of Appendix B in a fresh process where the final primal objective is not stored, and uses it only if it reproduces the stored safe value exactly) | `results/review/margin_exceptions/exceptions.json`, `resolve/*.json`; `summary/gpt2_margin_exceptions.csv`, `summary/P9d_gpt2_margin_exceptions.csv` |
+| the tables above and the files `P9a`–`P9d` of `figdata/` (the numbers are printed; `python figscripts/stats.py` prints the paper's from `figdata/`) | `python experiments/review_summary.py` | `results/review/summary/*.csv` |
+
+Run on the stored records of the paper, `review_summary.py` reproduces `figdata/P9b_crown_sdp_intervals.csv` byte for byte
+and `P9a`, `P9c`, `P9d` to their last digit (relative differences below `1e-9`; the paper's files passed through one more
+CSV round trip). On the units of the `--quick` runs the curvature certificate agrees with the paper's records to `3e-16`,
+the plain bound propagation runs reproduce the stored bounds exactly, and the terms of bound (39) are identical.
+
+Run time (measured for the paper): curvature certificate 20 seconds at 16 workers (closed form); CROWN with the intervals
+8.4 minutes at 18 workers x 1 thread (three bound computations per unit); terms of bound (39) 5.7 minutes at 16 workers;
+the logit-margin exceptions a few minutes (seven repeated re-solves at 4 threads). `--quick` runs take seconds.
+
 ## Benchmark check
 
 ```bash
 python benchmark/verify.py --sample 200 --seed 0
 python benchmark/verify.py --rho 0.01
+python benchmark/verify.py --model gpt-oss-20b --sample 200 --seed 0
+python benchmark/verify.py --model gpt-oss-20b --all
 ```
+
+On the workstation of `README.md` all 17,280 GPT-2 units and all 61,440 gpt-oss-20b units pass (`benchmark/SCHEMA.md`
+gives the checks, the tolerances and the memory and time of the gpt-oss-20b check).
 
 ## Appendix B
 
