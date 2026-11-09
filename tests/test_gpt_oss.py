@@ -13,7 +13,8 @@ heads when the real cache exists (skipped otherwise). The last tests check that 
 cache: a complete cache is only read, nothing is written through a symlink, an incomplete cache is not re-extracted without
 ``force``, the workers never extract, and a new extraction is moved into place from a temporary directory only when it
 succeeded (the previous directory kept). The benchmark writer of ``experiments/gpt_oss.py`` and its summaries in the columns of
-the figure data are tested on synthetic records."""
+the figure data are tested on synthetic records, and the gpt-oss path of benchmark/verify.py (its rotary maps, its numpy
+head and the Hugging Face attention module) on the synthetic model."""
 from __future__ import annotations
 
 import json
@@ -517,3 +518,66 @@ def test_summaries_have_the_columns_of_the_figure_data(tmp_path):
     assert C[["kind", "w_t_bin", "model", "units"]].values.tolist() == [
         ["fq", "[0.0, 0.05)", "gpt2", 2], ["fq", "[0.2, 0.5)", "gpt2", 1], ["fq", "[5.0, inf)", "gpt2", 1],
         ["free", "[0.0, 0.05)", "gpt-oss-20b", 1], ["free", "[0.05, 0.1)", "gpt-oss-20b", 2]]
+
+
+def _hf_attention(W: dict):
+    """The Hugging Face attention module of gpt-oss (float64, eager) with the synthetic weights of ``syn_cache``."""
+    import torch
+    from transformers import GptOssConfig
+    from transformers.models.gpt_oss.modeling_gpt_oss import GptOssAttention
+
+    cfg = GptOssConfig(hidden_size=D_SYN, num_attention_heads=G.N_HEADS, num_key_value_heads=G.N_KV, head_dim=G.DH,
+                       num_hidden_layers=1, layer_types=["sliding_attention"], sliding_window=128, attention_bias=True)
+    cfg._attn_implementation = "eager"
+    at = GptOssAttention(cfg, 0).double().eval()
+    with torch.no_grad():
+        for name, w, b in (("q_proj", "Wq", "bq"), ("k_proj", "Wk", "bk"), ("v_proj", "Wv", "bv"), ("o_proj", "Wo", "bo")):
+            getattr(at, name).weight.copy_(torch.as_tensor(W[w]))
+            getattr(at, name).bias.copy_(torch.as_tensor(W[b]))
+        at.sinks.copy_(torch.as_tensor(W["sinks"]))
+    return at
+
+
+def test_verify_rope_matrix_is_the_models_function():
+    import torch
+    from transformers.models.gpt_oss.modeling_gpt_oss import apply_rotary_pos_emb
+
+    V = _load("bench_verify", _root() / "benchmark" / "verify.py")
+    rng = np.random.default_rng(2)
+    T = 6
+    cos, sin = rng.standard_normal((T, G.DH // 2)), rng.standard_normal((T, G.DH // 2))
+    x = rng.standard_normal((1, 2, T, G.DH))
+    q, _ = apply_rotary_pos_emb(torch.as_tensor(x), torch.as_tensor(x), torch.as_tensor(cos[None]), torch.as_tensor(sin[None]))
+    R = np.stack([V.rope_matrix(cos[t], sin[t]) for t in range(T)])
+    assert np.max(np.abs(np.einsum("tab,htb->hta", R, x[0]) - q[0].numpy())) <= 1e-14
+    assert np.max(np.abs(R - G.rotation_matrices(cos, sin))) <= 1e-15
+
+
+def test_verify_gpt_oss_path_on_the_synthetic_model(syn_cache, tmp_path):
+    """Part x records -> write_benchmark -> benchmark/verify.py's gpt-oss path (its numpy head and the Hugging Face
+    attention module, here with the synthetic weights): every rebuilt worst-case input lies in its ball and in the stored
+    bracket with the strict tolerance, the tokens count as reproduced, the two implementations agree, and a bracket that
+    excludes the stored maximizer fails."""
+    import torch
+
+    GO = _load("gpt_oss_script", _root() / "experiments" / "gpt_oss.py")
+    V = _load("bench_verify", _root() / "benchmark" / "verify.py")
+    GO.write_benchmark(_x_records(), tmp_path / "b", allow_partial=True)
+    units = V.load_units(tmp_path / "b" / "units.csv")
+    ang = V.load_angles(tmp_path / "b" / "angles.csv.gz", set(units))
+    W = G.layer_weights(0)
+    M = object.__new__(V.GptOss)
+    M.torch, M.attn = torch, {0: _hf_attention(W)}
+    M.weights = {0: {"q_proj": W["Wq"], "k_proj": W["Wk"], "v_proj": W["Wv"], "o_proj": W["Wo"], "b_q_proj": W["bq"],
+                     "b_k_proj": W["bk"], "b_v_proj": W["bv"], "sinks": W["sinks"], "scale": float(W["scale"])}}
+    cos, sin = _rope(T_SYN)
+    cache = {p: {"z": G.prompt_data(p)["z"], "cos": cos, "sin": sin,
+                 "R": np.stack([V.rope_matrix(cos[t], sin[t]) for t in range(T_SYN)])} for p in range(5)}
+    for uid, u in units.items():
+        r = V.check_unit(M, u, ang[uid], cache)
+        assert r["ok"] and r["reproduced"], (uid, r["notes"])
+        assert max(r["impl_diff_max"], r["impl_diff_min"]) <= 1e-12 * max(1.0, abs(float(u["max_hi"])))
+        assert r["worst_excess_rel"] <= 1e-12
+    bad = dict(next(iter(units.values())))
+    bad["max_lo"] = bad["max_hi"] = repr(float(bad["max_hi"]) + 1e-6 * (1 + abs(float(bad["max_hi"]))))
+    assert not V.check_unit(M, bad, ang[bad["unit_id"]], cache)["ok"]
