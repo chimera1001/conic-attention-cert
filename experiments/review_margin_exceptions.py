@@ -157,7 +157,7 @@ def exceptions(out: Path, refs: Path, sfx: str) -> dict:
                     "d_bound_recomputed": abs(cb["bound"] - b),
                     "term_knapsack": terms["knapsack"], "term_eta": terms["eta"], "term_cov": terms["cov"],
                     "pruning_slack": r.get("F0vf_pruning_slack") or 0.0, "n_pruned": len(r.get("pruned_keys") or []),
-                    "bound_39": b, "dominant_term": dom, "dominant_of_three": dom3,
+                    "bound_F0v": b, "dominant_term": dom, "dominant_of_three": dom3,
                     "share_knapsack": terms["knapsack"] / b, "share_eta": terms["eta"] / b, "share_cov": terms["cov"] / b,
                     "share_pruning_slack": comps["pruning slack"] / b,
                     "gap_over_knapsack": gc / terms["knapsack"] if terms["knapsack"] > 0 else None,

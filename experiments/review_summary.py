@@ -10,11 +10,13 @@ Writes into ``<out>/summary`` (default ``results_dir()/review/summary``, with ``
   certificate's gap, the interval widths and the checks) and ``P9b_crown_sdp_intervals.csv``;
 * ``gptoss_bound_terms.csv`` (``review_bound_terms.py``, the columns of ``figdata/P4a_bound_terms.csv``) and
   ``P9c_gptoss_bound_terms.csv``;
-* ``gpt2_margin_exceptions.csv`` and ``P9d_gpt2_margin_exceptions.csv`` (``review_margin_exceptions.py``, one row per
-  exception).
+* ``gpt2_margin_exceptions.csv`` (``review_margin_exceptions.py``, one row per exception, with the records it was read
+  from) and ``P9d_gpt2_margin_exceptions.csv`` (the same without the two record columns; ``bound_F0v`` is bound (25)).
 
-The ``P9*`` files hold the columns of the figure data with 10 significant digits (``P9d`` in full), so that a rerun can
-replace the files in ``figdata/``; ``python figscripts/stats.py`` prints the paper's numbers from them.
+The ``P9*`` files hold the columns of the figure data with 10 significant digits (``P9d`` in full). Each is derived from
+the full table as written (read back with pandas), as the paper's files were, so that on the stored records of the paper
+a rerun reproduces the four files of ``figdata/`` byte for byte; ``python figscripts/stats.py`` prints the paper's
+numbers from them.
 
 Usage::
 
@@ -46,7 +48,7 @@ RUNS = ("plain:IBP", "plain:CROWN", "plain:alpha-CROWN", "ref:CROWN", "ref:alpha
 P9B_COLS = ["layer", "head", "prompt", "pos", "rho_rel", "cert_gap", "spread", "orig_CROWN_ratio", "orig_alpha-CROWN_ratio",
             "ref_CROWN_ratio", "ref_alpha-CROWN_ratio", "width_ratio_sdp_to_crown_max_key"]
 T5_COLS = ["unit", "layer", "head", "prompt", "rho_rel", "n", "w_t", "S", "term_knapsack", "term_eta", "term_cov",
-           "pruning_slack", "bound_39", "cert_gap", "best_bp_gap", "best_method", "gap_over_bound", "safe_minus_primal",
+           "pruning_slack", "bound_F0v", "cert_gap", "best_bp_gap", "best_method", "gap_over_bound", "safe_minus_primal",
            "dominant_term", "dominant_of_three", "share_knapsack", "share_cov", "share_pruning_slack", "gap_over_knapsack",
            "pct_cert_rel_gap", "pct_best_bp_rel_gap", "pct_gap_over_bound", "primal_minus_best", "n_pruned", "floor_tie",
            "ratio_cert_to_best", "cert_minus_best", "cert_rel_gap", "best_bp_rel_gap", "p_star", "p_star_lo", "p_star_hi",
@@ -54,6 +56,7 @@ T5_COLS = ["unit", "layer", "head", "prompt", "rho_rel", "n", "w_t", "S", "term_
            "final_solve", "final_primal", "final_dual", "primal_source", "safe_minus_dual", "first_solve_value_safe",
            "first_solve_primal", "first_solve_safe_minus_primal", "gap_minus_safe_minus_primal", "Delta", "theta", "rad_c",
            "D_tot", "budget_binds", "keys_with_chi_pos", "record", "lirpa_record"]
+P9D_COLS = [c for c in T5_COLS if c not in ("record", "lirpa_record")]
 SET_LABEL = {"gpt2_a": "GPT-2, head's output", "gpt2_lm": "GPT-2, logit margin", "oss_a": "gpt-oss-20b, head's output",
              "oss_lm": "gpt-oss-20b, logit margin"}
 
@@ -63,6 +66,14 @@ def _csv(df, path: Path, float_format: str | None = None) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     df.to_csv(tmp, index=False, lineterminator="\n", float_format=float_format)
     tmp.replace(path)
+
+
+def _figdata(full: Path, path: Path, cols: list, float_format: str | None) -> None:
+    """A figure-data file: the columns ``cols`` of the full table ``full`` as written, read back with pandas' default
+    parser (as the paper's files were derived from the full tables)."""
+    import pandas as pd
+
+    _csv(pd.read_csv(full)[cols], path, float_format)
 
 
 def spear(a, b):
@@ -110,7 +121,7 @@ def taylor(out: Path):
     U["curv_share_of_gap_T"] = U.curv_term / U.gap_T
     U = U.sort_values(["set", "layer", "head", "prompt", "rho_rel"])[T1_COLS]
     _csv(U, out / "summary" / "taylor_fixed_query.csv")
-    _csv(U[P9A_COLS], out / "summary" / "P9a_taylor_fixed_query.csv", "%.10g")
+    _figdata(out / "summary" / "taylor_fixed_query.csv", out / "summary" / "P9a_taylor_fixed_query.csv", P9A_COLS, "%.10g")
     print("\nCurvature (Taylor) certificate, fixed query: relative gaps (medians), median per-unit ratio of its gap to the "
           "certificate's")
     S = U.groupby(["set", "rho_rel"], sort=False).agg(
@@ -163,7 +174,7 @@ def crown_intervals(out: Path):
     D["set_minus_ref_CROWN"] = (D["set_CROWN_ub"] - D["ref_CROWN_ub"]).abs()
     D["set_minus_ref_alpha"] = (D["set_alpha-CROWN_ub"] - D["ref_alpha-CROWN_ub"]).abs()
     _csv(D, out / "summary" / "crown_sdp_intervals.csv")
-    _csv(D[P9B_COLS], out / "summary" / "P9b_crown_sdp_intervals.csv", "%.10g")
+    _figdata(out / "summary" / "crown_sdp_intervals.csv", out / "summary" / "P9b_crown_sdp_intervals.csv", P9B_COLS, "%.10g")
     print("\nCROWN / alpha-CROWN with the certificate's semidefinite score intervals (varying query): median per-unit ratios "
           "to the certificate's gap, without / with the intervals")
     S = D.groupby("rho_rel").agg(units=("cert", "size"), CROWN=("orig_CROWN_ratio", "median"),
@@ -191,7 +202,7 @@ def bound_terms(out: Path):
     D = pd.DataFrame(rows)
     T = D[P4A_COLS].sort_values(["source", "rho_rel", "layer", "head", "prompt"])
     _csv(T, out / "summary" / "gptoss_bound_terms.csv")
-    _csv(T, out / "summary" / "P9c_gptoss_bound_terms.csv", "%.10g")
+    _figdata(out / "summary" / "gptoss_bound_terms.csv", out / "summary" / "P9c_gptoss_bound_terms.csv", P4A_COLS, "%.10g")
     print("\nTerms of bound (25) on gpt-oss-20b (KN = knapsack term, cov = covariance term; shares of the bound)")
     for part, P in D.groupby("part"):
         tm = P[["F0vf_term_knapsack", "F0vf_term_eta", "F0vf_term_cov"]].to_numpy(dtype=float)
@@ -219,6 +230,7 @@ def margin_exceptions(out: Path):
         return None
     E = C.read_json(f)
     D, X = pd.DataFrame(E["exceptions"]), pd.DataFrame(E["context"])
+    D = D.rename(columns={"bound_39": "bound_F0v"})  # the name in records written before the rename
     print(f"\nGPT-2 logit-margin exceptions: {len(D)} of {E['n_units']} fixed-query units")
     if not len(D):
         return D
@@ -230,7 +242,7 @@ def margin_exceptions(out: Path):
     D["primal_minus_best"] = D.final_primal - D.best_bp_ub  # the relaxation's primal objective above the best bound?
     D = D.sort_values(["floor_tie", "ratio_cert_to_best"])
     _csv(D[T5_COLS], out / "summary" / "gpt2_margin_exceptions.csv")
-    _csv(D[T5_COLS], out / "summary" / "P9d_gpt2_margin_exceptions.csv")
+    _figdata(out / "summary" / "gpt2_margin_exceptions.csv", out / "summary" / "P9d_gpt2_margin_exceptions.csv", P9D_COLS, None)
     print(f"  {int(D.floor_tie.sum())} ties at the 1e-6 floor; the others: "
           + ", ".join(f"{u} ({m}, cert. gap / best gap {r:.3f})" for u, m, r in
                       D[~D.floor_tie][["unit", "best_method", "ratio_cert_to_best"]].itertuples(index=False)))

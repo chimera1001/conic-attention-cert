@@ -210,9 +210,10 @@ their `--quick` runs), never write there, and write one JSON per unit under `$AI
 | Section 7.2: the 13 GPT-2 logit-margin units on which the best of IBP, CROWN and alpha-CROWN is not looser than the certificate (7 ties below 3e-7 logits; 6 in blocks 8 and 9, 1.01–1.25 times bound propagation's gap), read through bound (25) | `python experiments/review_margin_exceptions.py` (needs `jmlr_extensions.py --part lm`; repeats the re-solve of Appendix B in a fresh process where the final primal objective is not stored, and uses it only if it reproduces the stored safe value exactly) | `results/review/margin_exceptions/exceptions.json`, `resolve/*.json`; `summary/gpt2_margin_exceptions.csv`, `summary/P9d_gpt2_margin_exceptions.csv` |
 | the tables above and the files `P9a`–`P9d` of `figdata/` (the numbers are printed; `python figscripts/stats.py` prints the paper's from `figdata/`) | `python experiments/review_summary.py` | `results/review/summary/*.csv` |
 
-Run on the stored records of the paper, `review_summary.py` reproduces `figdata/P9b_crown_sdp_intervals.csv` byte for byte
-and `P9a`, `P9c`, `P9d` to their last digit (relative differences below `1e-9`; the paper's files passed through one more
-CSV round trip). On the units of the `--quick` runs the curvature certificate agrees with the paper's records to `3e-16`,
+Run on the stored records of the paper, `review_summary.py` reproduces the four files `P9a`–`P9d` of `figdata/` byte for
+byte (each is derived from its full table as written, as the paper's were). `P9d_gpt2_margin_exceptions.csv` holds one
+row per exception with the columns of `gpt2_margin_exceptions.csv` except the two record paths; `bound_F0v` is bound (25)
+and `term_knapsack`, `term_eta`, `term_cov`, `pruning_slack` are its parts. On the units of the `--quick` runs the curvature certificate agrees with the paper's records to `3e-16`,
 the plain bound propagation runs reproduce the stored bounds exactly, and the terms of bound (25) are identical.
 
 Run time (measured for the paper): curvature certificate 20 seconds at 16 workers (closed form); CROWN with the intervals

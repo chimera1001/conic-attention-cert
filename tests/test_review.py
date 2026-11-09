@@ -126,7 +126,7 @@ def test_summary_columns_are_those_of_the_figure_data():
 
     S = _load("review_summary")
     for name, cols in (("P9a_taylor_fixed_query", S.P9A_COLS), ("P9b_crown_sdp_intervals", S.P9B_COLS),
-                       ("P9c_gptoss_bound_terms", S.P4A_COLS), ("P9d_gpt2_margin_exceptions", S.T5_COLS),
+                       ("P9c_gptoss_bound_terms", S.P4A_COLS), ("P9d_gpt2_margin_exceptions", S.P9D_COLS),
                        ("P4a_bound_terms", S.P4A_COLS)):
         assert list(pd.read_csv(ROOT / "figdata" / f"{name}.csv", nrows=0).columns) == cols, name
     assert S.small_slope([0.002, 0.005, 0.01], [4e-6, 2.5e-5, 1e-4]) == pytest.approx(2.0)
