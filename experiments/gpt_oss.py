@@ -16,15 +16,18 @@ Parts (``--part``; default ``x f v l``, then the summary):
   median secant width ``w_t <= 0.3``. The radii below are those of this calibration (``r0 = 0.0002``).
 * ``x`` -- every one of the 1,536 query heads, five prompts, query positions 4 and the last token, ``R4``: the exact maximum and
   minimum with the query fixed (Theorem 7), the first-order certificate and the Vertex-Softmax bound; no semidefinite
-  solve. ``--summarize`` writes the benchmark files (``units.csv``, ``angles.csv.gz``; the format of ``benchmark/``).
+  solve. ``--benchmark`` writes the benchmark files from these records (``benchmark/gpt-oss-20b``: ``units.csv``,
+  ``angles.csv.gz``, ``prompts.txt``; the format of ``benchmark/SCHEMA.md``).
 * ``f`` -- the sampled heads, five prompts, position 4, ``R4``, query fixed: the certificate, the first-order and vertex
   bounds, the exact references, IBP, CROWN and alpha-CROWN.
 * ``v`` -- the same heads, ``R3``, query varying: the certificate with the re-solve rule of Appendix B, the best feasible
   values of the maximization and the minimization, the bounds above.
 * ``l`` -- the units of ``f`` with the logit-margin specification and ``R3``.
 * ``--summarize`` (also run after the parts) -- ``table4.csv``, ``table5.csv``, ``crown_vs_summary.csv``, ``lm_summary.csv``
-  (the columns of ``figdata/P4b_crown_summary.csv`` plus ``VS_*``), ``x_summary.csv``, ``units.csv`` and the benchmark
-  files, in ``<out>/summary``; the tables are printed.
+  (the columns of ``figdata/P4b_crown_summary.csv`` plus ``VS_*``; the files ``figdata/P8_crown_vs_summary.csv`` and
+  ``figdata/P8_lm_summary.csv``), ``x_summary.csv`` (``figdata/P8_x_summary.csv``), ``gpt2_compare.csv`` (Figure 6,
+  ``figdata/P8_gpt2_compare.csv``; needs the GPT-2 records of ``experiments/jmlr_extensions.py --part vs-gpt2``),
+  ``units.csv`` and a copy of the benchmark files, in ``<out>/summary``; the tables are printed.
 
 Relative gaps as in Table 6: fixed query ``(ub - p*) / (p* - p_min)``, varying query ``(ub - lb) / (lb - phi_min)``. Every unit
 checks the validity of every bound against its reference, the theorem checks and E2 (the instance reproduces the head's
@@ -36,6 +39,7 @@ Usage::
     python experiments/gpt_oss.py --part x --workers 12
     python experiments/gpt_oss.py --part f v l --workers 3 --threads-per-solve 4
     python experiments/gpt_oss.py --summarize
+    python experiments/gpt_oss.py --benchmark
     python experiments/gpt_oss.py --quick --workers 2 --threads-per-solve 2
 """
 from __future__ import annotations
@@ -70,6 +74,7 @@ R4 = (0.0002, 0.0004, 0.001, 0.002)  # r0 x {1, 2, 5, 10}, r0 = 0.0002 (part cal
 R3 = R4[:3]
 QUICK = {"heads": ((5, 9), (11, 36)), "prompts": (0,), "R4": R4[:2], "R3": R3[:2]}
 LABEL = {"fq": "fixed", "free": "varying"}
+WT_BINS = (0.0, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, np.inf)  # bins of the secant width w_t (comparison with GPT-2 small)
 
 
 def sample_heads() -> list[tuple[int, int]]:
@@ -203,22 +208,47 @@ def summarize_calib(out: Path, heads) -> None:
     print(f"  r0 = {r0} (largest rho_rel with median w_t <= 0.3); the radii of this script assume r0 = {R4[0]}")
 
 
-def summarize_x(out: Path) -> None:
+def x_records(out: Path) -> list[dict]:
+    """The records of part x (``<out>/x/L<ll>/<unit>.json``)."""
+    return [json.loads(f.read_text()) for f in sorted((out / "x").glob("*/*.json"))]
+
+
+def summarize_x(out: Path, recs: list[dict] | None = None) -> None:
+    """Part x by query position and radius in the columns of ``figdata/P8_x_summary.csv`` (``x_summary.csv``; the share of
+    units resolved to ``1e-10`` of the nominal value spread, the relative gaps of the first-order and vertex bounds, the
+    share of the first-order gap the vertex bound removes, the range of motion over the nominal value spread, the bracket
+    width over the range of motion, the time per unit), the per-unit slopes (``x_slopes.csv``), one row per unit
+    (``x_units.csv``) and the benchmark files in ``<out>/summary/benchmark`` (:func:`write_benchmark`, partial allowed)."""
     import pandas as pd
 
-    recs = [json.loads(f.read_text()) for f in sorted((out / "x").glob("*/*.json"))]
+    recs = x_records(out) if recs is None else recs
     if not recs:
         return
     D = pd.DataFrame([{k: r.get(k) for k in ("layer", "head", "kv", "prompt", "pos", "rho_rel", "n", "w_t", "p_fq", "min_fq",
-                                             "spread_fq", "r_greedy", "r_VS", "exact_status", "range", "range_no_sink")}
-                      for r in recs])
+                                             "p_fq_lo", "p_fq_hi", "spread_fq", "r_greedy", "r_VS", "exact_status", "range",
+                                             "range_no_sink")} | {"time_s": r["times"]["total_s"]} for r in recs])
     D["position"] = np.where(D.pos == POS, "4", "last")
     D["rel_gap_greedy"] = (D.r_greedy - D.p_fq) / D.spread_fq
     D["rel_gap_vs"] = (D.r_VS - D.p_fq) / D.spread_fq
+    D["VS_removed"] = (D.r_greedy - D.r_VS) / (D.r_greedy - D.p_fq)
+    D["width_over_spread"] = (D.p_fq_hi - D.p_fq_lo) / D.spread_fq
+
+    def mx(x):
+        x = pd.to_numeric(x, errors="coerce").dropna()
+        return float(x.max()) if len(x) else None
+
     S = []
     for (pk, rho), g in D.groupby(["position", "rho_rel"]):
-        S.append({"position": pk, "rho_rel": rho, "units": len(g), "share_resolved": float((g.exact_status == "exact").mean()),
-                  "median_w_t": g.w_t.median(), "greedy_median": g.rel_gap_greedy.median(), "VS_median": g.rel_gap_vs.median()})
+        gr, gv = _iqr(g.rel_gap_greedy), _iqr(g.rel_gap_vs)
+        S.append({"position": pk, "rho_rel": rho, "units": len(g), "resolved": int((g.exact_status == "exact").sum()),
+                  "share_resolved": float((g.exact_status == "exact").mean()), "median_w_t": g.w_t.median(),
+                  "greedy_median": gr["median"], "greedy_q25": gr["q25"], "greedy_q75": gr["q75"], "greedy_max": mx(g.rel_gap_greedy),
+                  "VS_median": gv["median"], "VS_q25": gv["q25"], "VS_q75": gv["q75"], "VS_max": mx(g.rel_gap_vs),
+                  "VS_removed_median": _iqr(g.VS_removed)["median"],
+                  "spread_over_range_median": _iqr(g.spread_fq / g["range"])["median"],
+                  "bracket_width_over_spread_median": _iqr(g.width_over_spread)["median"],
+                  "bracket_width_over_spread_max": mx(g.width_over_spread),
+                  "time_median_s": g.time_s.median(), "n_keys_median": g.n.median()})
     S = pd.DataFrame(S)
     sl = []
     for (pk, l, h, p), g in D.groupby(["position", "layer", "head", "prompt"]):
@@ -230,15 +260,35 @@ def summarize_x(out: Path) -> None:
     _csv(S, out / "summary" / "x_summary.csv")
     _csv(SL, out / "summary" / "x_slopes.csv")
     print("\nPart x (exact, fixed query): relative gaps of first order and Vertex-Softmax")
-    print(S.to_string(index=False))
+    print(S[["position", "rho_rel", "units", "share_resolved", "median_w_t", "greedy_median", "VS_median",
+             "VS_removed_median"]].to_string(index=False))
     print("median per-unit slopes over the radii:\n" + SL.to_string(index=False))
-    cols = ["unit_id", "layer", "head", "kv_group", "prompt", "query_pos", "rho_rel", "radius_rule", "n_keys", "n_varying",
-            "max_lo", "max_hi", "min_lo", "min_hi", "nominal_output", "range_of_motion", "status", "value_at_max_input",
-            "value_at_min_input", "first_order_certificate", "vertex_softmax_bound"]
-    d = out / "summary" / "benchmark"
-    d.mkdir(parents=True, exist_ok=True)
+    print(write_benchmark(recs, out / "summary" / "benchmark", allow_partial=True))
+
+
+#: the columns of ``benchmark/gpt-oss-20b/units.csv``: those of the GPT-2 benchmark plus the key-value group and the
+#: Vertex-Softmax bound
+BENCH_COLUMNS = ["unit_id", "layer", "head", "kv_group", "prompt", "query_pos", "rho_rel", "radius_rule", "n_keys", "n_varying",
+                 "max_lo", "max_hi", "min_lo", "min_hi", "nominal_output", "range_of_motion", "status", "value_at_max_input",
+                 "value_at_min_input", "first_order_certificate", "vertex_softmax_bound"]
+
+
+def write_benchmark(recs: list[dict], dest: Path, allow_partial: bool = False) -> dict:
+    """The benchmark of gpt-oss-20b from the records of part x, in the format of ``benchmark/SCHEMA.md``: ``units.csv``
+    (one row per unit, ordered by layer, head, prompt, query position and radius; numbers with 17 significant digits),
+    ``angles.csv.gz`` (one row per varying key: its radius and the canonical angles of the maximizing and the minimizing
+    input; written with a fixed gzip time stamp, so that the bytes depend only on the records) and ``prompts.txt``. Without
+    ``allow_partial`` every one of the 1,536 heads x five prompts x {4, last position} x ``R4`` must be present."""
+    import io
+    import shutil
+
+    by = {(r["layer"], r["head"], r["prompt"], r["pos"], r["rho_rel"]): r for r in recs}
+    last = {}
+    for (_, _, p, pos, _) in by:
+        last[p] = max(last.get(p, POS), pos)
     rows, arows = [], []
-    for r in sorted(recs, key=lambda r: (r["layer"], r["head"], r["prompt"], r["pos"], r["rho_rel"])):
+    for k in sorted(by):
+        r = by[k]
         uid = U.unit_name(r["layer"], r["head"], r["prompt"], r["pos"], r["rho_rel"])
         ok = r["exact_status"] == "exact"
         rows.append({"unit_id": uid, "layer": r["layer"], "head": r["head"], "kv_group": r["kv"], "prompt": r["prompt"],
@@ -250,17 +300,30 @@ def summarize_x(out: Path) -> None:
                      "first_order_certificate": repr(r["r_greedy"]), "vertex_softmax_bound": repr(r["r_VS"])})
         for j, rj, tmax, tmin in zip(r["varying_keys"], r["rho_j"], r["theta_max"], r["theta_min"]):
             arows.append((uid, j, repr(float(rj)), repr(float(tmax)), repr(float(tmin))))
-    with open(d / "units.csv", "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols, lineterminator="\n")
+    expected = {(l, h, p, pos, rho) for l, h in all_heads() for p in range(5) for pos in (POS, last.get(p)) for rho in R4}
+    missing = sorted(expected - set(by), key=str)
+    if not allow_partial and (missing or len(last) < 5 or any(v == POS for v in last.values())):
+        raise SystemExit(f"benchmark: {len(missing)} units of part x missing (first: {missing[:3]}); run --part x first")
+    dest.mkdir(parents=True, exist_ok=True)
+    with open(dest / "units.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=BENCH_COLUMNS, lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
-    with gzip.open(d / "angles.csv.gz", "wt", newline="", encoding="utf-8") as fh:
+    with open(dest / "angles.csv.gz", "wb") as raw, gzip.GzipFile(str(dest / "angles.csv.gz"), "wb", fileobj=raw, mtime=0) as gz, \
+            io.TextIOWrapper(gz, encoding="utf-8", newline="") as fh:
         w = csv.writer(fh, lineterminator="\n")
         w.writerow(("unit_id", "key", "rho_j", "theta_max", "theta_min"))
         w.writerows(arows)
+    shutil.copyfile(ROOT / "data" / "prompts.txt", dest / "prompts.txt")
+    return {"benchmark": str(dest), "units": len(rows), "angle_rows": len(arows), "missing": len(missing),
+            "not_exact": sum(r["status"] != "exact" for r in rows)}
 
 
-def summarize_units(out: Path, R4_, R3_) -> None:
+def summarize_units(out: Path, R4_, R3_, gpt2_units: Path | None = None) -> None:
+    """Parts f, v, l: one row per unit (``units.csv``), the analogues of Tables 4-7 (``table4.csv``, ``table5.csv``,
+    ``crown_vs_summary.csv``, ``lm_summary.csv``: the columns of ``figdata/P8_crown_vs_summary.csv`` and
+    ``figdata/P8_lm_summary.csv``), the slopes, and the comparison with GPT-2 small at matched secant width
+    (:func:`gpt2_compare`) when ``gpt2_units`` exists."""
     import pandas as pd
 
     rows = []
@@ -325,10 +388,39 @@ def summarize_units(out: Path, R4_, R3_) -> None:
         _csv(pd.DataFrame(T5), out / "summary" / "table5.csv")
         SL = _slopes(A, {"all_radii": None, "two_smallest": R3_[:2]})
         _csv(SL, out / "summary" / "slopes.csv")
+        if gpt2_units is not None:
+            gpt2_compare(A, gpt2_units, out)
     if len(L_):
         S7 = _summary_rows(L_, tc)
         _csv(S7, out / "summary" / "lm_summary.csv")
         _print_table(S7, "gpt-oss-20b, logit margin (Table 7 analogue)")
+
+
+def gpt2_compare(A, gpt2_units: Path, out: Path) -> None:
+    """The data of Figure 6 (``gpt2_compare.csv``, the columns of ``figdata/P8_gpt2_compare.csv``): by query type and bin of
+    the secant width ``w_t`` (:data:`WT_BINS`, closed on the left), the units, the median ``w_t`` and the median and
+    quartiles of the relative gaps of the certificate, first order, CROWN, alpha-CROWN and the vertex bound, for
+    gpt-oss-20b (parts f and v, ``A``) and GPT-2 small (the 5,760 units of Table 6 with the vertex bound,
+    ``vs_gpt2_units.csv`` of ``experiments/jmlr_extensions.py --part vs-gpt2``). Figure 6 draws the bins that hold at
+    least 30 units of each model."""
+    import pandas as pd
+
+    if not gpt2_units.exists():
+        print(f"(comparison with GPT-2 small skipped: {gpt2_units} not found; run experiments/jmlr_extensions.py --part vs-gpt2)")
+        return
+    cols = ["kind", "rho_rel", "w_t"] + [f"{m}_rel_gap" for m in ("cert", "greedy", "CROWN", "alpha-CROWN", "VS")]
+    X = pd.concat([pd.read_csv(gpt2_units)[cols].assign(model="gpt2"), A[cols].assign(model="gpt-oss-20b")],
+                  ignore_index=True)
+    X["w_bin"] = pd.cut(X.w_t, WT_BINS, right=False)
+    rows = []
+    for (kind, b, model), g in X.groupby(["kind", "w_bin", "model"], observed=True):
+        row = {"kind": kind, "w_t_bin": str(b), "w_lo": b.left, "w_hi": b.right, "model": model, "units": len(g),
+               "median_w_t": g.w_t.median()}
+        for m in ("cert", "greedy", "CROWN", "alpha-CROWN", "VS"):
+            s_ = _iqr(g[f"{m}_rel_gap"])
+            row.update({f"{m}_median": s_["median"], f"{m}_q25": s_["q25"], f"{m}_q75": s_["q75"], f"{m}_n": s_["n"]})
+        rows.append(row)
+    _csv(pd.DataFrame(rows), out / "summary" / "gpt2_compare.csv")
 
 
 # ============================================================================================ main
@@ -342,6 +434,12 @@ def main(argv=None) -> None:
     ap.add_argument("--threads-per-solve", type=int, default=1)
     ap.add_argument("--out", type=Path, default=None, help="default results_dir()/gpt_oss (with --quick .../gpt_oss_quick)")
     ap.add_argument("--summarize", action="store_true", help="only summarize the stored records")
+    ap.add_argument("--refs", type=Path, default=None, help="root of the GPT-2 records for the comparison at matched secant "
+                    "width (default results_dir(); reads jmlr/summary/vs_gpt2_units.csv, with --quick jmlr_quick/...)")
+    ap.add_argument("--benchmark", action="store_true", help="only write the benchmark files from the records of part x "
+                    "(units.csv, angles.csv.gz, prompts.txt) into --benchmark-dir")
+    ap.add_argument("--benchmark-dir", type=Path, default=ROOT / "benchmark" / "gpt-oss-20b")
+    ap.add_argument("--allow-partial", action="store_true", help="--benchmark: write the units computed so far")
     ap.add_argument("--force", action="store_true", help="re-extract the cache even if one exists (the current directory "
                     "is kept as <name>.replaced-<time>); without it an incomplete cache is an error, never re-extracted")
     a = ap.parse_args(argv)
@@ -354,6 +452,9 @@ def main(argv=None) -> None:
     if a.prompts:
         prompts = [int(x) for x in a.prompts.split(",")]
     R4_, R3_ = (QUICK["R4"], QUICK["R3"]) if a.quick else (R4, R3)
+    if a.benchmark:
+        print(write_benchmark(x_records(out), a.benchmark_dir, allow_partial=a.allow_partial or a.quick))
+        return
     if not a.summarize:
         if a.workers * a.threads_per_solve > compute.thread_budget():
             raise SystemExit(f"workers x threads = {a.workers * a.threads_per_solve} exceeds AIMP_MAX_THREADS = "
@@ -375,7 +476,8 @@ def main(argv=None) -> None:
     if "calib" in a.part or a.summarize:
         summarize_calib(out, sample)
     summarize_x(out)
-    summarize_units(out, R4_, R3_)
+    refs = a.refs or results_dir()
+    summarize_units(out, R4_, R3_, refs / ("jmlr_quick" if a.quick else "jmlr") / "summary" / "vs_gpt2_units.csv")
 
 
 if __name__ == "__main__":

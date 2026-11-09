@@ -12,7 +12,8 @@ logit-margin vector is the frozen-scale linearization; the GPT-2 default of the 
 heads when the real cache exists (skipped otherwise). The last tests check that ``prepare()`` never overwrites an existing
 cache: a complete cache is only read, nothing is written through a symlink, an incomplete cache is not re-extracted without
 ``force``, the workers never extract, and a new extraction is moved into place from a temporary directory only when it
-succeeded (the previous directory kept)."""
+succeeded (the previous directory kept). The benchmark writer of ``experiments/gpt_oss.py`` and its summaries in the columns of
+the figure data are tested on synthetic records."""
 from __future__ import annotations
 
 import json
@@ -431,3 +432,88 @@ def test_prepare_failed_extraction_leaves_the_cache_untouched(tmp_path, monkeypa
     monkeypatch.setattr(G, "_extract_into", _fake_extract(calls))
     assert G.prepare() == {"new": True} and c.is_dir() and calls[0].name.startswith(f".{G.MODEL_NAME}.tmp-")
     assert not [q for q in tmp_path.iterdir() if ".tmp-" in q.name or ".replaced-" in q.name]
+
+
+# ------------------------------------------------------------------ benchmark files (experiments/gpt_oss.py) and verify.py
+def _load(name: str, path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _root():
+    from pathlib import Path
+
+    return Path(__file__).resolve().parents[1]
+
+
+def _x_records() -> list[dict]:
+    """Part x records of three synthetic units (the synthetic cache must be active)."""
+    from aimp import pipeline
+
+    return [pipeline.evaluate_fq_exact(l, h, p, pos, 2e-2, model="gpt-oss-20b") | {"kv": h // G.GROUP}
+            for l, h, p, pos in ((0, 36, 2, 4), (0, 63, 3, 8), (0, 9, 1, 4))]
+
+
+def test_write_benchmark_files(syn_cache, tmp_path):
+    """``write_benchmark``: the columns of ``benchmark/gpt-oss-20b/units.csv``, one angle row per varying key, the same bytes
+    whatever the order of the records (fixed gzip time stamp), the prompts, and no partial benchmark unless allowed."""
+    GO = _load("gpt_oss_script", _root() / "experiments" / "gpt_oss.py")
+    recs = _x_records()
+    out = GO.write_benchmark(recs, tmp_path / "b1", allow_partial=True)
+    assert out["units"] == 3 and out["not_exact"] == 0 and out["angle_rows"] == 4 + 8 + 4
+    with pytest.raises(SystemExit):
+        GO.write_benchmark(recs, tmp_path / "b2", allow_partial=False)
+    GO.write_benchmark(recs[::-1], tmp_path / "b3", allow_partial=True)
+    for f in ("units.csv", "angles.csv.gz", "prompts.txt"):
+        assert (tmp_path / "b1" / f).read_bytes() == (tmp_path / "b3" / f).read_bytes()
+    assert (tmp_path / "b1" / "prompts.txt").read_text() == (_root() / "data" / "prompts.txt").read_text()
+    import csv
+    import gzip
+
+    with open(tmp_path / "b1" / "units.csv", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    assert list(rows[0]) == GO.BENCH_COLUMNS and [r["unit_id"] for r in rows] == sorted(r["unit_id"] for r in rows)
+    r0 = next(r for r in recs if r["head"] == 9)
+    row = next(r for r in rows if r["unit_id"] == U.unit_name(0, 9, 1, 4, 2e-2))
+    assert float(row["max_lo"]) == r0["p_fq_lo"] and float(row["max_hi"]) == r0["p_fq_hi"] and row["n_keys"] == "6"
+    with gzip.open(tmp_path / "b1" / "angles.csv.gz", "rt", newline="") as fh:
+        ang = [a for a in csv.DictReader(fh) if a["unit_id"] == row["unit_id"]]
+    assert [float(a["theta_max"]) for a in ang] == list(r0["theta_max"]) and [int(a["key"]) for a in ang] == [0, 1, 2, 3]
+
+
+def test_summaries_have_the_columns_of_the_figure_data(tmp_path):
+    import pandas as pd
+
+    GO = _load("gpt_oss_script", _root() / "experiments" / "gpt_oss.py")
+    rng = np.random.default_rng(4)
+    recs = []
+    for l, h in ((0, 0), (3, 9)):
+        for p in (0, 1):
+            for pos in (4, 18):
+                for rho in GO.R4:
+                    pf, sp = 1.0 + rng.uniform(), 0.05 * rho / GO.R4[0]
+                    recs.append({"layer": l, "head": h, "kv": h // G.GROUP, "prompt": p, "pos": pos, "rho_rel": rho,
+                                 "n": pos + 2, "n_var": pos, "w_t": 280 * rho, "p_fq": pf, "min_fq": pf - sp,
+                                 "p_fq_lo": pf - 1e-12, "p_fq_hi": pf + 1e-12, "min_fq_lo": pf - sp - 1e-12,
+                                 "min_fq_hi": pf - sp + 1e-12, "spread_fq": sp, "r_greedy": pf + 0.2 * sp,
+                                 "r_VS": pf + 0.1 * sp, "exact_status": "exact", "range": 10.0, "range_no_sink": 9.0,
+                                 "phi_nominal": pf - sp / 2, "value_max_input": pf, "value_min_input": pf - sp,
+                                 "varying_keys": list(range(pos)), "rho_j": [rho] * pos, "theta_max": [0.1] * pos,
+                                 "theta_min": [-3.0] * pos, "times": {"total_s": 0.5}})
+    GO.summarize_x(tmp_path, recs)
+    S = pd.read_csv(tmp_path / "summary" / "x_summary.csv")
+    assert list(S.columns) == list(pd.read_csv(_root() / "figdata" / "P8_x_summary.csv").columns)
+    assert S.units.tolist() == [len(recs) // 8] * 8 and np.allclose(S.greedy_median, 0.2) and np.allclose(S.VS_removed_median, 0.5)
+    ms = ("cert", "greedy", "CROWN", "alpha-CROWN", "VS")
+    mk = lambda w, kind: pd.DataFrame({"kind": kind, "rho_rel": 0.002, "w_t": w} | {f"{m}_rel_gap": 0.1 * w for m in ms})  # noqa: E731
+    mk(np.array([0.01, 0.03, 0.3, 7.0]), "fq").to_csv(tmp_path / "g2.csv", index=False)
+    GO.gpt2_compare(mk(np.array([0.04, 0.06, 0.06]), "free"), tmp_path / "g2.csv", tmp_path)
+    C = pd.read_csv(tmp_path / "summary" / "gpt2_compare.csv")
+    assert list(C.columns) == list(pd.read_csv(_root() / "figdata" / "P8_gpt2_compare.csv").columns)
+    assert C[["kind", "w_t_bin", "model", "units"]].values.tolist() == [
+        ["fq", "[0.0, 0.05)", "gpt2", 2], ["fq", "[0.2, 0.5)", "gpt2", 1], ["fq", "[5.0, inf)", "gpt2", 1],
+        ["free", "[0.0, 0.05)", "gpt-oss-20b", 1], ["free", "[0.05, 0.1)", "gpt-oss-20b", 2]]
