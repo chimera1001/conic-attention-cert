@@ -68,3 +68,21 @@ def test_taylor_certificate_is_valid_and_second_order(seed):
                 assert abs(d2) <= bound2 * (1 + 1e-12)
         gaps.append(T["r_T"] - 0.5 * (ex["p_fq_lo"] + ex["p_fq_hi"]))
     assert 1.6 < math.log(gaps[1] / gaps[0]) / math.log(2.0) < 2.4
+
+
+def test_crown_with_score_intervals_on_a_synthetic_head():
+    """The plain runs reproduce :func:`aimp.lirpa.bounds`; with certified score intervals (Cauchy-Schwarz here) as
+    reference or as the node's bounds every bound stays above the sampled maximum, and the intervals contain the samples."""
+    pytest.importorskip("auto_LiRPA")
+    from aimp import bounds, instances, lirpa
+
+    T2 = _load("review_crown_intervals")
+    inst = instances.f_random(3, d=6, d_k=3, d_v=3, n=3, rho=0.05)
+    si = bounds.score_intervals(inst, "cs")
+    r = T2.lirpa_runs(inst, si["s_lo"], si["s_hi"], seed=5)
+    b = lirpa.bounds(inst, 5, threads=1)
+    assert r["gate_ok"] and r["sdp_interval_max_violation_on_samples"] <= 0 and r["sdp_contains_nominal"]
+    for m in ("IBP", "CROWN", "alpha-CROWN"):
+        assert r["runs"][f"plain:{m}"]["ub"] == b["methods"][m]["ub"]
+    for k in ("ref:CROWN", "ref:alpha-CROWN", "set:CROWN", "set:alpha-CROWN"):
+        assert r["runs"][k]["status"] == "ok" and r["runs"][k]["ub"] >= b["sampled_max"] - 1e-9 * max(1.0, abs(b["sampled_max"]))
