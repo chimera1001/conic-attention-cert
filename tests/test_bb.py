@@ -184,7 +184,7 @@ def _f0v_inputs(inst, ctrl):
 @pytest.mark.parametrize("seed", range(3))
 def test_lookahead_rule(seed):
     """Bound-lookahead split — valid bracket, the chosen key minimizes max(F^-, F^+) over the keys with D_j > 0,
-    predicted gain >= 1 (the children's bounds (39) never exceed the parent's), the S / value keys recorded."""
+    predicted gain >= 1 (the children's bounds (25) never exceed the parent's), the S / value keys recorded."""
     from aimp.bounds import child_controls
     from aimp.theory import f0v_final_fields
 

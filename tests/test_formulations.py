@@ -127,7 +127,7 @@ def test_ps_backends_agree(st):
 
 def test_validity_and_ordering_10_random():
     """r >= multistart lb for every relaxation (10 instances); r_sdp <= r_ps; r_ps <= ibp-free checks;
-    rank-1 => exact; the first-order gap bound (34) of Theorem 9 on box instances where exact is optimal."""
+    rank-1 => exact; the first-order gap bound (20) of Theorem 9 on box instances where exact is optimal."""
     n_rank1 = 0
     for seed in range(10):
         st = "ball" if seed % 2 else "box"

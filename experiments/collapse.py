@@ -6,7 +6,7 @@ Reads the unit records of ``experiments/gpt2_ladder.py`` (every quantity is comp
 * ``collapse_points.csv`` — per unit: the weighted secant slack ``S``, the value-weighted slack ``Pi_v``, the dispersion
   ``theta`` of the nominal pattern, the nominal spread and the gap (the data of Figure 3; columns as
   ``figdata/P3c_collapse_points.csv``);
-* ``bound_terms.csv`` — per unit: the second-order bound (39) and its knapsack, eta and covariance terms (columns as
+* ``bound_terms.csv`` — per unit: the second-order bound (25) and its knapsack, eta and covariance terms (columns as
   ``figdata/P4a_bound_terms.csv``),
 
 then prints the rank correlations and ratios quoted in Section 7 (the same code as ``figscripts/stats.py``).
@@ -74,9 +74,9 @@ def report(terms) -> None:
     print(f"units above the numerical floor: {len(B)} (S<1: {int(lo.sum())}, S>=1: {int((~lo).sum())})")
     print("Spearman(gap, S) all:", f"{spearmanr(B.gap, B.S).statistic:.2f}")
     print("Spearman(gap, value-weighted slack of Figure 3) all / S<1 / S>=1:", sp("Pi_v"))
-    print("Spearman(gap, knapsack term of bound (39)) all / S<1 / S>=1:", sp("F0vf_term_knapsack"))
+    print("Spearman(gap, knapsack term of bound (25)) all / S<1 / S>=1:", sp("F0vf_term_knapsack"))
     r = B.gap / B.bound_F0v_final
-    print(f"gap / bound (39): median {r.median():.3f}, max {r.max():.3f}")
+    print(f"gap / bound (25): median {r.median():.3f}, max {r.max():.3f}")
     print(f"share of units below the diagonal of Figure 3: {(B.gap < B.Pi_v).mean():.3f}")
 
 

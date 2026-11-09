@@ -1,4 +1,4 @@
-"""Log-attention intervals (14), the cone form, the safe dual bound (``value_safe``, Proposition 16), and the norm-based
+"""Log-attention intervals (6), the cone form, the safe dual bound (``value_safe``, Proposition 16), and the norm-based
 second-order bounds with the secant width ``w_t`` (``bound_F0t``) and the weighted secant slack ``S``
 (``bound_F0s``)."""
 import math
@@ -22,7 +22,7 @@ def sample_Z(inst, rng):
                      for t in range(inst.T)])
 
 
-# ------------------------------------------------------------------ log-attention intervals (14)
+# ------------------------------------------------------------------ log-attention intervals (6)
 def test_tight_t_intervals_contain_log_softmax():
     rng = np.random.default_rng(0)
     for _ in range(200):
@@ -183,7 +183,7 @@ def test_F0_tight_bound_holds(fams):
         assert r.value - lb <= b["bound_F0t"] + 1e-6
 
 
-# ------------------------------------------------------------------ weighted secant slack S (16) and bound_F0s
+# ------------------------------------------------------------------ weighted secant slack S (8) and bound_F0s
 def test_sandwich_S_formula_and_F0s_holds():
     from aimp.theory import bound_F0s, sandwich_S
 

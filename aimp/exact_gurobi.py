@@ -165,7 +165,7 @@ def _add_redundant(m, inst, ctrl, reps, U, a, y):
     """Valid redundant constraints (do not change the feasible set): ``g_j = a_j u_j`` (bilinear)
     with the perspective constraints on ``g_j`` and on ``u_j - g_j`` (the products of ``a_j`` and ``1 - a_j`` with the
     set, as in (R5) of Definition 3), ``y = sum_j N (a_j c_j + B_j g_j)``, and the certified l1 cut of the pattern
-    polytope (32)."""
+    polytope (18)."""
     from aimp.bounds import choose_cut
 
     N = inst.head.N

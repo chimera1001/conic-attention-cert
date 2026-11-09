@@ -20,7 +20,7 @@ either order; stored as a symmetric matrix with ``coef/2`` on both sides, as MOS
 groups) is bounded exactly as in ``safe_bound.safe_dual_bound``, plus the same rounding allowance.
 
 :func:`solve_sdp1` builds ``sdp_1`` = the level-one relaxation of Definition 3 (lifted sets, scores, the secant on the
-log-attention intervals (14), the interval diagonal, ``persp`` + ``simplex_x_z``, the l1 cut) with the exp-cone pruning
+log-attention intervals (6), the interval diagonal, ``persp`` + ``simplex_x_z``, the l1 cut) with the exp-cone pruning
 of Appendix B — constraint for constraint the model of
 ``relax_sdp.solve_sdp(rlt=("persp", "simplex_x_z"), t_interval="tight", cone_form=True)`` for ball / ellipsoid / point sets
 (tests/test_sdp_mosek.py compares the two). :func:`shor_score` is the two-set Shor score bound of ``bounds._shor``.
@@ -414,7 +414,7 @@ PHASE3_TOL = {"MSK_DPAR_INTPNT_CO_TOL_PFEAS": 1e-6, "MSK_DPAR_INTPNT_CO_TOL_DFEA
 def solve_sdp1(inst: Instance, ctrl: dict, threads: int | None = None, time_limit: float | None = None,
                prune_tol: float | None = 1e-6, cut: str = "B", tol: dict | None = None,
                keep_X: bool = False, scale_a: bool = False) -> SolveResult:
-    """``sdp_1`` (Definition 3: persp + simplex_x_z + interval diagonal; secant on the log-attention intervals (14);
+    """``sdp_1`` (Definition 3: persp + simplex_x_z + interval diagonal; secant on the log-attention intervals (6);
     width-pair cut by default, ``cut="auto"`` the pair with the smaller radius; exp-cone pruning) with
     ``value := value_safe``. Ball / ellipsoid / box / point sets only. ``keep_X``: attach the moment matrix and the
     ``u``-block positions as ``res.X`` / ``res.upos`` (starts of the strong lower bound, :mod:`aimp.lower`), not

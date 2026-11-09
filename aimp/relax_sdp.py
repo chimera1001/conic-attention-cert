@@ -42,7 +42,7 @@ Families (``rlt`` is a set of names):
   (S2) that identity times every lifted ``u`` coordinate; (S3) ``||Xi[pl_j, u_j]|| <= rho_j pl_j`` (same for ``ql``) for
   ball keys, the linear products with the box bounds for box keys.
 
-**Log-attention intervals, cone form, safe value.** ``t_interval="tight"`` (default; eq. (14) of the paper): the secant
+**Log-attention intervals, cone form, safe value.** ``t_interval="tight"`` (default; eq. (6) of the paper): the secant
 lives on ``[log a_lo_j, log a_hi_j]`` intersected with ``[s_lo_j - tau_hi, s_hi_j - tau_lo]`` (``"loose"``: the wider
 intervals ``[s_lo_j - tau_hi, s_hi_j - tau_lo]``, with ``t_hi`` clipped at ``log a_hi`` above ``T_CLIP``); ``w_t``
 before/after is recorded. ``cone_form=True`` (default) writes ``exp(t) <= a`` as ``ExpCone(t, 1, a)`` and every norm
@@ -316,7 +316,7 @@ def solve_sdp(inst: Instance, ctrl: dict | None = None, rlt=("persp", "simplex_x
     t_lo, t_hi = t_intervals(s_lo, s_hi, "loose")
     w_t_loose = float(np.max(t_hi - t_lo))
     a_lo, a_hi = np.maximum(ctrl["a_lo"], 0.0), np.minimum(ctrl["a_hi"], 1.0)
-    if t_interval == "tight":  # eq. (14): t_j = log a_j in [log a_lo_j, log a_hi_j]
+    if t_interval == "tight":  # eq. (6): t_j = log a_j in [log a_lo_j, log a_hi_j]
         t_lo, t_hi = t_intervals(s_lo, s_hi, "tight")
         clip_mask = np.zeros(n, bool)
     elif t_interval == "loose":

@@ -1,4 +1,4 @@
-"""The value-weighted sandwich identity (27) of Proposition 4 and the second-order gap bound with the per-key slacks
+"""The value-weighted sandwich identity of Proposition 4 and the second-order gap bound with the per-key slacks
 ``S_j`` (:func:`aimp.theory.bound_F0v_terms`).
 
 (1) The identity ``sum_j (abar_j - sigma_j) h_j = sum_j d_j (h_j - hbar_sigma)`` holds to 1e-12 on random

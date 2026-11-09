@@ -1,5 +1,5 @@
-"""Gap bounds of the level-one relaxation and their constants: the second-order gap bound (bound (39) of Theorem 12 in
-the paper; :func:`f0v_final`) with the exact secant gaps (Lemma 3) and the value-weighted knapsack (19), its norm-based
+"""Gap bounds of the level-one relaxation and their constants: the second-order gap bound (bound (25) of Theorem 12 in
+the paper; :func:`f0v_final`) with the exact secant gaps (Lemma 3) and the value-weighted knapsack (10), its norm-based
 and total-variation variants (``bound_F0``, ``bound_F0t``, ``bound_F0s``), the directional constants ``rad_c``, ``nu_c``
 (Section 2), the first-order bounds of Theorem 9 in directional form, a linearization bound (``bound_F``, for the
 ``lin_sandwich`` family of :mod:`aimp.relax_sdp`), and the nominal affine/bilinear decomposition of the scores."""
@@ -87,10 +87,10 @@ def nominal_decomposition(inst: Instance) -> dict:
 
 
 def bound_F0(inst: Instance, ctrl: dict, nom: dict | None = None) -> dict:
-    """Norm-based form of the second-order gap bound (a diagnostic; the paper's bound (39) is :func:`f0v_final`):
+    """Norm-based form of the second-order gap bound (a diagnostic; the paper's bound (25) is :func:`f0v_final`):
     ``r - p_star <= ||c|| [rad (eta_exp + eta) + nu W / 2]`` with ``W = sum_j (a_hi - a_lo)`` (attention intervals of
     Lemma 2, clipped to [0, 1]), ``eta_exp = Delta^2/8 e^Delta`` (secant slack constant on the score width),
-    ``eta = max_j ||B_i^T M B_j|| rho_i rho_j`` (the score covariance (18)), ``nu = max_j ||N B_j|| rho_j``."""
+    ``eta = max_j ||B_i^T M B_j|| rho_i rho_j`` (the score covariance (9)), ``nu = max_j ||N B_j|| rho_j``."""
     nom = nom or nominal_decomposition(inst)
     a_lo = np.clip(np.asarray(ctrl["a_lo"], float), 0, 1)
     a_hi = np.clip(np.asarray(ctrl["a_hi"], float), 0, 1)
@@ -107,8 +107,8 @@ def bound_F0(inst: Instance, ctrl: dict, nom: dict | None = None) -> dict:
 def t_width(ctrl: dict, mode: str = "loose") -> float:
     """Width of the interval on which the implemented log-form relaxation places its exp sandwich (secant).
     ``"loose"``: the wider intervals ``t_j = s_j - tau in [s_lo_j - tau_hi, s_hi_j - tau_lo]``, i.e.
-    ``w_t = max_j (s_hi_j - s_lo_j) + (tau_hi - tau_lo)`` (<= 2 Delta, cf. eq. (15)). ``"tight"``: intersected with
-    ``[log a_lo_j, log a_hi_j]``, the log-attention intervals (14)."""
+    ``w_t = max_j (s_hi_j - s_lo_j) + (tau_hi - tau_lo)`` (<= 2 Delta, cf. eq. (7)). ``"tight"``: intersected with
+    ``[log a_lo_j, log a_hi_j]``, the log-attention intervals (6)."""
     if mode == "loose":
         s_lo, s_hi = np.asarray(ctrl["s_lo"], float), np.asarray(ctrl["s_hi"], float)
         return float(np.max(s_hi - s_lo) + (float(ctrl["tau_hi"]) - float(ctrl["tau_lo"])))
@@ -132,8 +132,8 @@ def bound_F0t(inst: Instance, ctrl: dict, nom: dict | None = None, mode: str = "
 
 
 def sandwich_S(ctrl: dict) -> float:
-    """The weighted secant slack of eq. (16): ``S = (1/8) sum_j a_hi_j w_j^2`` with ``w_j = t_hi_j - t_lo_j`` the widths
-    of the log-attention intervals (14) and ``a_hi`` the upper attention bounds of Lemma 2 (clipped to [0, 1])."""
+    """The weighted secant slack of eq. (8): ``S = (1/8) sum_j a_hi_j w_j^2`` with ``w_j = t_hi_j - t_lo_j`` the widths
+    of the log-attention intervals (6) and ``a_hi`` the upper attention bounds of Lemma 2 (clipped to [0, 1])."""
     from aimp.bounds import t_intervals
 
     t_lo, t_hi = t_intervals(ctrl["s_lo"], ctrl["s_hi"], "tight")
@@ -199,8 +199,9 @@ def theorem_fields(rec: dict, name: str, bound: float, slack: float = 0.0, appli
 
 # --------------------------------------------------------------------------- directional constants and bounds
 def directional_constants(inst: Instance) -> dict:
-    """Directional constants of Section 2 (eq. (17)) in the coordinates the certificate runs in: ``h_j(z) = c^T N z``,
-    ``g_j = B_j^T N^T c``, ``hbar_j = c^T N c_j``. ``rad_c`` = half the range of ``c^T N z`` over the union of the sets,
+    """Directional constants of Section 2 (the half-range ``rad_c`` of the values) in the coordinates the certificate
+    runs in: ``h_j(z) = c^T N z``, ``g_j = B_j^T N^T c``, ``hbar_j = c^T N c_j``. ``rad_c`` = half the range of
+    ``c^T N z`` over the union of the sets,
     computed exactly from support functions (``max_j sup_{Z_j} h - min_j inf_{Z_j} h``)/2, which is the closed form
     ``max_j (hbar_j + rho_j ||g_j||) - min_j (hbar_j - rho_j ||g_j||)`` for balls / ellipsoids; ``nu_c = max_j rho_j ||g_j||``
     with ``rho_j`` the base radius (:func:`base_radius`; ellipsoids: the ball radius of the base, ``B_j = E``)."""
@@ -226,11 +227,11 @@ def directional_bounds(rad_c: float, nu_c: float, *, n: int, Delta: float, gamma
                        eta: float | None = None, W: float | None = None, eta_exp_wt: float | None = None,
                        pruning_slack: float = 0.0, eps_cut: float | None = None) -> dict:
     """Directional bound fields from the directional constants and the record's controls. ``bound_B_c = Delta rad_c``
-    (the width form of the first-order gap bound (34) of Theorem 9), ``bound_C_c = 4 (n-1) e^{-gamma} rad_c``
-    (``gamma > 0``; the margin bound (35) without its denominator), ``bound_F0s_c = rad_c (2S/(1-S) + eta) + nu_c W/2``
+    (the width form of the first-order gap bound (20) of Theorem 9), ``bound_C_c = 4 (n-1) e^{-gamma} rad_c``
+    (``gamma > 0``; the margin bound (21) without its denominator), ``bound_F0s_c = rad_c (2S/(1-S) + eta) + nu_c W/2``
     (+ the pruning slack of the pruned keys, as in the norm form; ``S < 1`` else ``None``), ``bound_F0t_c`` the same
     with ``eta_exp(w_t)``, ``Pi_c = rad_c min(2S/(1-S), 2)``; ``bound_ps_c = 2 eps rad_c`` with the greedy's cut radius
-    ``eps`` (the general form (34) for the pair actually used, diagnostic)."""
+    ``eps`` (the general form (20) for the pair actually used, diagnostic)."""
     out = {"rad_c": rad_c, "nu_c": nu_c, "bound_B_c": Delta * rad_c,
            "bound_C_c": (4 * (n - 1) * _exp(-gamma) * rad_c) if (gamma is not None and gamma > 0) else None,
            "bound_ps_c": None if eps_cut is None else 2 * eps_cut * rad_c}
@@ -272,7 +273,7 @@ def directional_fields(inst: Instance, ctrl: dict, nom: dict | None = None, prun
 
 # --------------------------------------------------------------------------- value-weighted secant slack
 def secant_widths(ctrl: dict) -> np.ndarray:
-    """Per-key secant widths ``w_j = t_hi_j - t_lo_j`` on the log-attention intervals (14) (the widths of
+    """Per-key secant widths ``w_j = t_hi_j - t_lo_j`` on the log-attention intervals (6) (the widths of
     :func:`sandwich_S`)."""
     from aimp.bounds import t_intervals
 
@@ -293,7 +294,7 @@ def value_scores(S_j: np.ndarray, h_max: np.ndarray, phi_min: float) -> np.ndarr
 
 
 def p7v_sides(e: np.ndarray, d: np.ndarray, h: np.ndarray) -> tuple[float, float]:
-    """Both sides of the value-weighted sandwich identity (27) of Proposition 4 for ``abar = e + d`` (``sum abar = 1``)
+    """Both sides of the value-weighted sandwich identity of Proposition 4 for ``abar = e + d`` (``sum abar = 1``)
     and ``sigma = e / sum e``: ``sum_j (abar_j - sigma_j) h_j`` and ``sum_j d_j (h_j - hbar_sigma)``."""
     e, d, h = (np.asarray(x, float) for x in (e, d, h))
     sigma = e / e.sum()
@@ -303,7 +304,7 @@ def p7v_sides(e: np.ndarray, d: np.ndarray, h: np.ndarray) -> tuple[float, float
 
 def bound_F0v_terms(S_j, h_max, a_lo, a_hi, nu_cj, phi_min_cert: float, eta: float, rad_c: float,
                     pruning_slack: float = 0.0) -> dict:
-    """The second-order gap bound with the per-key slack ``S_j >= D_j`` in place of the knapsack of bound (39):
+    """The second-order gap bound with the per-key slack ``S_j >= D_j`` in place of the knapsack of bound (25):
     ``r - p_star <= sum_j S_j (h_j^max - phi_min_cert + eta rad_c)_+ + eta rad_c + (1/2) sum_j (a_hi_j - a_lo_j)
     nu_{c,j}`` (+ the pruning slack of the pruned keys, as in every second-order bound check here).
     ``a_lo``, ``a_hi`` clipped to [0, 1] as in ``W``. Returns the bound and its three terms."""
@@ -361,7 +362,7 @@ def perkey_fields(inst: Instance, ctrl: dict, *, phi_min_strong: float, phi_min_
 
 def saturated_slack(S_j, a_lo, a_hi) -> np.ndarray:
     """Saturating per-key slack: besides ``d_j <= S_j``, also ``d_j = abar_j - e^{tbar_j} <= a_hi_j - a_lo_j``, because
-    the relaxation keeps ``abar_j <= a_hi_j`` and ``tbar_j >= t_lo_j >= log a_lo_j`` (log-attention intervals (14); cf.
+    the relaxation keeps ``abar_j <= a_hi_j`` and ``tbar_j >= t_lo_j >= log a_lo_j`` (log-attention intervals (6); cf.
     the saturation of the exact secant gap in Lemma 3). Returns ``D_j = min(S_j, a_hi_j - a_lo_j)`` (``a`` clipped to
     [0, 1]); ``D_j`` in place of ``S_j`` in ``Pi_v`` / ``bound_F0v`` gives their saturating forms (``Pi_v_sat``,
     ``bound_F0v_sat``)."""
@@ -370,7 +371,7 @@ def saturated_slack(S_j, a_lo, a_hi) -> np.ndarray:
     return np.minimum(np.asarray(S_j, float), np.maximum(a_hi - a_lo, 0.0))
 
 
-# --------------------------------------------------------------------------- bound (39) with the exact secant gaps
+# --------------------------------------------------------------------------- bound (25) with the exact secant gaps
 _W_SERIES = 1e-2  # w below: series for y = expm1(w)/w - 1 (terms to w^6 / 5040)
 _Y_SERIES = 1e-2  # y below: series for F(y) = (1+y) log1p(y) - y (terms to y^8 / 56)
 _W_LARGE = 30.0  # w above: the m-form A + m (log(1+y) - 1) (A may underflow, e^w overflow)
@@ -385,7 +386,7 @@ def _F_of_y(y: float) -> float:
 
 
 def secant_gap(t_lo: float, t_hi: float) -> float:
-    """The exact secant gap ``D = max_{t in [t_lo, t_hi]} (ell(t) - e^t)`` of Lemma 3, eq. (24) (``ell`` the secant of
+    """The exact secant gap ``D = max_{t in [t_lo, t_hi]} (ell(t) - e^t)`` of Lemma 3, eq. (14) (``ell`` the secant of
     ``exp`` on the interval), evaluated stably (Appendix B): ``w = t_hi - t_lo``, ``A = e^{t_lo}``,
     ``y = expm1(w)/w - 1`` (series ``sum_{k=1..6} w^k / (k+1)!`` for ``w < 1e-2``), ``D = A F(y)`` (:func:`_F_of_y`);
     for ``w > 30`` the equivalent ``D = A + m (log(1+y) - 1)`` with ``m = (e^{t_hi} - A)/w`` and
@@ -433,12 +434,12 @@ def knapsack(chi, D, D_tot: float) -> tuple[float, np.ndarray]:
 
 def f0v_final(t_lo, t_hi, h_max, a_lo, a_hi, nu_cj, *, phi_min_cert: float, phi_min_strong: float | None, eta: float,
               rad_c: float, pruning_slack: float = 0.0) -> dict:
-    """The second-order gap bound (39) of Theorem 12. Per key ``A_j = e^{t_lo_j}``, ``B_j = e^{t_hi_j}``, ``w_j``,
+    """The second-order gap bound (25) of Theorem 12. Per key ``A_j = e^{t_lo_j}``, ``B_j = e^{t_hi_j}``, ``w_j``,
     ``D_j`` (:func:`secant_gap`), ``chi_j = (h_j^max - phi_min_cert + eta rad_c)_+``, ``chi*_j = (h_j^max -
     phi_min_strong)_+``; unit ``D_tot = 1 - sum_j A_j``,
     ``bound_F0v_final = KN(chi, D, D_tot) + eta rad_c + (1/2) sum_j (a_hi_j - a_lo_j) nu_{c,j}`` (+ the pruning slack
     of the keys pruned in the relaxation, cf. Appendix B; ``a`` clipped to [0, 1]), ``Pi_v_star = KN(chi*, D, D_tot)``.
-    ``t_lo, t_hi``: the log-attention intervals (14) (:func:`aimp.bounds.t_intervals`, ``"tight"``; equal to
+    ``t_lo, t_hi``: the log-attention intervals (6) (:func:`aimp.bounds.t_intervals`, ``"tight"``; equal to
     ``[log a_lo_j, log a_hi_j]``)."""
     t_lo, t_hi = np.asarray(t_lo, float), np.asarray(t_hi, float)
     h_max, nu_cj = np.asarray(h_max, float), np.asarray(nu_cj, float)
@@ -465,7 +466,7 @@ def f0v_final(t_lo, t_hi, h_max, a_lo, a_hi, nu_cj, *, phi_min_cert: float, phi_
 
 def f0v_final_fields(inst: Instance, ctrl: dict, *, phi_min_cert: float, phi_min_strong: float | None, eta: float,
                      pruning_slack: float = 0.0, dc: dict | None = None) -> dict:
-    """:func:`f0v_final` of one instance from its controls (log-attention intervals (14), exact support values
+    """:func:`f0v_final` of one instance from its controls (log-attention intervals (6), exact support values
     ``h_j^max``, ``nu_{c,j} = rho_j ||g_j||``, ``rad_c`` of :func:`directional_constants`)."""
     from aimp.bounds import t_intervals
 

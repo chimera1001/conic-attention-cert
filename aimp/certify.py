@@ -7,10 +7,10 @@
     if bound_C <= eps_target:  cert = r_greedy                       route "margin"
     else:                      cert = min(r_greedy, value_safe(sdp_1)) route "min"
 
-``sdp_1`` = ``persp + simplex_x_z`` (the level-one relaxation of Definition 3) with the log-attention intervals (14),
+``sdp_1`` = ``persp + simplex_x_z`` (the level-one relaxation of Definition 3) with the log-attention intervals (6),
 cone form, and ``value := value_safe`` (the safe dual bound of Proposition 16) **always**; the primal / dual /
 dual-residual-certified values are kept as diagnostics. The second-order gap bound is checked in two norm-based forms
-(``F0t`` = the ``eta_exp(w_t)`` constant; ``F0s`` = ``2S/(1-S)``, diagnostic; bound (39) itself is
+(``F0t`` = the ``eta_exp(w_t)`` constant; ``F0s`` = ``2S/(1-S)``, diagnostic; bound (25) itself is
 :func:`aimp.theory.f0v_final`). Without an exact reference the check uses the best known lower bound ``lb`` and upper
 bound ``ub`` on ``p_star``: ``value_safe - lb <= bound`` proves it (``"satisfied"``), ``value_safe - ub > bound``
 refutes it (``"violated"``; the true gap exceeds the bound), anything in between is ``"inconclusive"``.
@@ -267,7 +267,7 @@ def sdp_retol(inst: Instance, ctrl: dict, threads: int | None = None, time_limit
 
 def split_scores(ctrl: dict) -> np.ndarray:
     """``S_j = a_hi_j w_j^2 / 8`` at a node (the weighted secant slack of key ``j``, split score of ``rule="S"``;
-    ``w_j`` the widths of the log-attention intervals (14), ``a_hi`` clipped to [0, 1])."""
+    ``w_j`` the widths of the log-attention intervals (6), ``a_hi`` clipped to [0, 1])."""
     from aimp.bounds import t_intervals
 
     t_lo, t_hi = t_intervals(ctrl["s_lo"], ctrl["s_hi"], "tight")
@@ -297,8 +297,8 @@ def _guard_mode(guard) -> str:
 
 
 def default_f0v_inputs(inst: Instance, ctrl: dict, cut: str = "B") -> dict:
-    """The unit-level inputs of bound (39) for the bound-lookahead rule, computed from the instance: ``h_max`` and
-    ``nu_{c,j}`` (exact support values), ``rad_c`` (directional constants), ``eta`` (the score covariance (18),
+    """The unit-level inputs of bound (25) for the bound-lookahead rule, computed from the instance: ``h_max`` and
+    ``nu_{c,j}`` (exact support values), ``rad_c`` (directional constants), ``eta`` (the score covariance (9),
     ``max_j ||B_i^T M B_j|| rho_i rho_j``), ``phi_min_cert = -r_greedy(-c)`` with the root controls."""
     from aimp.lower import neg_instance
     from aimp.relax_ps import solve_ps_greedy
@@ -332,7 +332,7 @@ def branch_and_bound(inst: Instance, ctrl: dict, lb: float, phi_min: float | Non
     of both rules at the split key, ``S / (S - 0.75 S_j)`` and ``Pi_v / (Pi_v - 0.75 P_j)``, and the other rule's key.
 
     ``rule="lookahead"`` (the bound-lookahead rule of Section 5): for every key with ``D_j > 0`` the two children (its
-    score interval halved) get their controls (:func:`aimp.bounds.child_controls`) and their bounds (39) with the unit's
+    score interval halved) get their controls (:func:`aimp.bounds.child_controls`) and their bounds (25) with the unit's
     ``h_j^max``, ``phi_min_cert``, ``eta``, ``rad_c``, ``nu_{c,j}`` (``f0v_inputs``, computed by :func:`default_f0v_inputs`
     when not given; plus each child's pruning slack); split
     ``argmin_j max(F^-_j, F^+_j)``, ties broken by the larger ``D_j chi_j``; predicted gain ``F_node / min_j max(F^-, F^+)``.

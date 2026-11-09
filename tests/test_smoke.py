@@ -39,7 +39,7 @@ def gpt2_ready():
 
 def test_gpt2_head_end_to_end(gpt2_ready):
     """Layer 0, head 1, prompt 0, query position 4, rho_rel = 0.001 with the procedure of Appendix B: the certificate is
-    valid against the best feasible value, at most the first-order certificate, inside the second-order bound (39), and
+    valid against the best feasible value, at most the first-order certificate, inside the second-order bound (25), and
     the relative gap is small (the unit is in the second-order regime)."""
     from aimp.pipeline import evaluate_unit
 

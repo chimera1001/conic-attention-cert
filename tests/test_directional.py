@@ -1,5 +1,5 @@
-"""Directional constants (``rad_c``, ``nu_c`` of Section 2) and the directional bounds: the first-order bounds (34),
-(35) of Theorem 9 with ``rad_c``, and the directional forms of the norm-based second-order bounds.
+"""Directional constants (``rad_c``, ``nu_c`` of Section 2) and the directional bounds: the first-order bounds (20),
+(21) of Theorem 9 with ``rad_c``, and the directional forms of the norm-based second-order bounds.
 
 On 50 random synthetic instances (d = 8, n = 3): every directional bound is <= its undirected counterpart, and the
 directional bounds hold against Gurobi exact values (three-valued with the exact bracket; never ``violated``)."""

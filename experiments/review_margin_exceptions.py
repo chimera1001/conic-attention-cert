@@ -1,5 +1,5 @@
 """The GPT-2 logit-margin exceptions (fixed query, position 4): the units on which the best of IBP / CROWN / alpha-CROWN is
-not looser than the certificate, read through the second-order bound (39) (Section 7.2, the logit-margin comparison;
+not looser than the certificate, read through the second-order bound (25) (Section 7.2, the logit-margin comparison;
 ``figdata/P9d_gpt2_margin_exceptions.csv``).
 
 Selection: over the fixed-query logit-margin units of ``experiments/jmlr_extensions.py --part lm``
@@ -8,7 +8,7 @@ Selection: over the fixed-query logit-margin units of ``experiments/jmlr_extensi
 ``cert - p* <= 1e-6 max(1, |p*|)`` (``p*`` the exact fixed-query worst case, midpoint of its bracket). On the paper's units
 this gives 13 exceptions, 7 of them ties.
 
-Per exception: the terms of bound (39) as stored (``F0vf_term_knapsack``, ``F0vf_term_eta`` (0 with a fixed query),
+Per exception: the terms of bound (25) as stored (``F0vf_term_knapsack``, ``F0vf_term_eta`` (0 with a fixed query),
 ``F0vf_term_cov``, ``bound_F0v_final``), the certificate's gap, the best bound-propagation gap, gap / bound and the distance
 ``value_safe - primal objective`` of the solve behind the final ``value_safe``. When the final ``value_safe`` comes from the
 re-solve of Appendix B (1e-9), the record holds that solve's dual objective but not its primal objective: the re-solve is
@@ -65,7 +65,7 @@ def final_solve(r: dict) -> dict:
 
 
 def chi_and_bound(r: dict, l: int, h: int, p: int, rho: float) -> dict:
-    """``chi_j`` and bound (39) recomputed from the stored score intervals (no semidefinite solve)."""
+    """``chi_j`` and bound (25) recomputed from the stored score intervals (no semidefinite solve)."""
     from aimp import bounds
     from aimp import gpt2_units as U
     from aimp.lower import neg_instance

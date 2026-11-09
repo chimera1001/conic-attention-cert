@@ -62,7 +62,7 @@ table, figure and number, the command, the output file and the run time measured
 |---|---|
 | `experiments/synthetic.py` | Section 7.1: Figure 1, Table 4 (slopes of the gaps in the radius), the width and temperature experiments |
 | `experiments/gpt2_ladder.py` | Section 7.2: Table 5 (accuracy on GPT-2 small), Figure 2 (radius ladder, per-unit slopes), tightness radii, branching |
-| `experiments/collapse.py` | Section 7.2: Figure 3 (gap against the weighted secant slack and the knapsack term), the shares of the terms of bound (39) |
+| `experiments/collapse.py` | Section 7.2: Figure 3 (gap against the weighted secant slack and the knapsack term), the shares of the terms of bound (25) |
 | `experiments/exact_fixed_query.py` | Section 7.2: Table 6 (exact worst cases with a fixed query) and the GPT-2 benchmark |
 | `experiments/bound_propagation.py` | Section 7.2: Table 7 and Figure 4, top (IBP, CROWN, alpha-CROWN on the same units), the alpha-CROWN settings |
 | `experiments/jmlr_extensions.py` | Section 7.2: the vertex-bound columns of Table 7 and Figure 4; the logit-margin specification, Table 8 and Figure 4, bottom; the vertex bound on synthetic heads (Section 7.1) |
@@ -70,7 +70,7 @@ table, figure and number, the command, the output file and the run time measured
 | `experiments/gpt_oss.py` | Section 7.3: Table 9 (accuracy on gpt-oss-20b), Table 10 (bound propagation and the vertex bound, both specifications), Figure 6 (the two models at matched secant width), the radius calibration, the gpt-oss-20b benchmark |
 | `experiments/review_taylor.py` | Sections 7.2 and 7.3: the curvature certificate (Table 3, "the constant, not the order"; `figdata/P9a`) |
 | `experiments/review_crown_intervals.py` | Section 7.2: CROWN and alpha-CROWN with the certificate's semidefinite score intervals (`figdata/P9b`) |
-| `experiments/review_bound_terms.py` | Section 7.3: the three terms of bound (39) on gpt-oss-20b (`figdata/P9c`) |
+| `experiments/review_bound_terms.py` | Section 7.3: the three terms of bound (25) on gpt-oss-20b (`figdata/P9c`) |
 | `experiments/review_margin_exceptions.py` | Section 7.2: the 13 logit-margin units where bound propagation is not looser (`figdata/P9d`) |
 | `experiments/review_summary.py` | the tables of the four `review_*` scripts and the files `P9a`-`P9d` |
 | `benchmark/verify.py` | checks the benchmark of either model against the Hugging Face weights (Code and Data Availability) |

@@ -67,7 +67,7 @@ def test_L4_and_softmax_interval_bounds():
         samp = rng.uniform(lo, hi, size=(200, n))
         A = np.array([softmax(s) for s in samp])
         assert np.all(A >= sb["a_lo"] - 1e-14) and np.all(A <= sb["a_hi"] + 1e-14)
-        # closed form (21) of Lemma 2
+        # closed form (12) of Lemma 2
         for j in range(n):
             other = [l for l in range(n) if l != j]
             alo = 1 / (1 + sum(math.exp(hi[l] - lo[j]) for l in other))
@@ -75,7 +75,7 @@ def test_L4_and_softmax_interval_bounds():
             assert abs(alo - sb["a_lo"][j]) < 1e-12 and abs(ahi - sb["a_hi"][j]) < 1e-12
         lse = [math.log(sum(math.exp(x) for x in s)) for s in samp]
         assert min(lse) >= sb["tau_lo"] - 1e-12 and max(lse) <= sb["tau_hi"] + 1e-12
-        # margin bound (23) of Lemma 2
+        # margin bound (13) of Lemma 2
         if n >= 2:
             gs = [lo[k] - np.delete(hi, k).max() for k in range(n)]
             js = int(np.argmax(gs))

@@ -280,7 +280,7 @@ P2_D, P2_N, P2_RHO_A = 8, 3, 0.1
 def p2_delta(seed: int, w_target: float, temp: float) -> Instance:
     """Secant-width sweep (part ``"2A"``): F_random, ``d = 8``, ``n = 3``, balls, ``rho = 0.1``, query = key 0, with the
     temperature ``temp`` chosen (by ``temp_for_w`` in ``experiments/synthetic.py``) so that the certified secant width
-    ``w_t`` (eq. (14) of the paper) equals ``w_target``."""
+    ``w_t`` (eq. (6) of the paper) equals ``w_target``."""
     inst = p1_random(seed, P2_N, P2_RHO_A, "ball", True, temp=temp, d=P2_D)
     inst.meta = _p1_meta("F_random", "ball", P2_D, 4, 4, P2_N, "w", w_target, True, seed, P2_RHO_A, temp,
                          w_target=w_target, part="2A")

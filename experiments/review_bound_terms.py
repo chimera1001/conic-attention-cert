@@ -1,8 +1,8 @@
-"""The three terms of the second-order bound (39) (Theorem 12, :func:`aimp.theory.f0v_final`) on the gpt-oss-20b
+"""The three terms of the second-order bound (25) (Theorem 12, :func:`aimp.theory.f0v_final`) on the gpt-oss-20b
 semidefinite units along the head's output, fixed query (part f, 3,840 units) and varying query (part v, 2,880 units), as
 in Section 7.3 (``figdata/P9c_gptoss_bound_terms.csv``, the columns of ``figdata/P4a_bound_terms.csv``)::
 
-  bound (39) = KN(chi, D, D_tot) + eta rad_c + (1/2) sum_j (a_hi_j - a_lo_j) nu_cj   (+ the pruning slack).
+  bound (25) = KN(chi, D, D_tot) + eta rad_c + (1/2) sum_j (a_hi_j - a_lo_j) nu_cj   (+ the pruning slack).
 
 The records of ``experiments/gpt_oss.py --part f`` store the three terms; those of part v do not, and they are computed here
 by the same call ``theory.f0v_final_fields(inst, ctrl, phi_min_cert, phi_min_strong, eta, pruning_slack, dc)`` from stored
@@ -42,7 +42,7 @@ def record_files(refs: Path, sfx: str, part: str) -> list[Path]:
 
 
 def recompute(part: str, rec: dict, l: int, h: int, p: int, pos: int, rho: float) -> dict:
-    """Bound (39) from the stored intervals (module docstring)."""
+    """Bound (25) from the stored intervals (module docstring)."""
     from aimp import bounds
     from aimp import gpt2_units as U
     from aimp.lower import neg_instance
@@ -120,7 +120,7 @@ def run_task(task: tuple) -> dict:
             r = evaluate(part, f, refs)
             C.write_unit(path, r)
             if not r["bound_holds"]:
-                bad.append(f"{f.stem}: gap above bound (39)")
+                bad.append(f"{f.stem}: gap above bound (25)")
         return {"name": name, "t": time.perf_counter() - t0, "bad": bad}
     except Exception as e:
         return {"name": name, "fatal": repr(e), "tb": traceback.format_exc()[-3000:]}
@@ -151,7 +151,7 @@ def main(argv=None) -> None:
     if a.workers > compute.thread_budget():
         raise SystemExit(f"--workers {a.workers} exceeds AIMP_MAX_THREADS = {compute.thread_budget()}")
     T = tasks(out, refs, sfx)
-    print(f"terms of bound (39), gpt-oss-20b: {sum(len(t[1]) for t in T)} units in {len(T)} groups")
+    print(f"terms of bound (25), gpt-oss-20b: {sum(len(t[1]) for t in T)} units in {len(T)} groups")
     run_part(run_task, [t for t in T if not all(unit_path(out, t[0], Path(f)).exists() for f in t[1])], a.workers, 1,
              out, "bound_terms")
 

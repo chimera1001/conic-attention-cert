@@ -4,7 +4,7 @@
   ``r_pp`` (greedy pattern-polytope bound), the level-one relaxation in MOSEK's task API with its safe dual bound, the
   certificate ``min(r_pp, safe value)``, the re-solve rule of Appendix B, the best feasible value from multistart
   ascent (``lb_strong``) and the smallest output found (``phi_min_strong``), and the per-key quantities of the
-  second-order bound (the value-weighted slack and the terms of bound (39)).
+  second-order bound (the value-weighted slack and the terms of bound (25)).
 * :func:`evaluate_fq_exact` — one unit with a fixed query: the exact worst case of Theorem 7 (certified brackets of
   the maximum and of the minimum), the first-order certificate, and the maximizing / minimizing angle of every varying
   key in the canonical frame of :func:`canonical_frame` (the benchmark of ``benchmark/``).
@@ -93,7 +93,7 @@ def quick_multistart(inst, ctrl, seed: int) -> tuple[float, float]:
 
 
 def collapse_fields(inst, ctrl, *, phi_min_strong: float, eta: float, pruning_slack: float) -> dict:
-    """The quantities of Figure 3 and of bound (39): the weighted secant slack ``S``, the value-weighted slack
+    """The quantities of Figure 3 and of bound (25): the weighted secant slack ``S``, the value-weighted slack
     ``Pi_v = sum_j S_j (h_j^max - phi_min)_+``, the dispersion of the nominal pattern, and the terms of the second-order
     bound with the exact secant gaps, the slack budget and the certified lower bound on the minimum."""
     from aimp.lower import neg_instance

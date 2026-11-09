@@ -1,5 +1,5 @@
 """Certified quantities: lemma constants (margin bound, Cauchy–Schwarz score half-width, LayerNorm radius, secant
-gap), score intervals (eq. (12) of the paper), attention intervals (Lemma 2), the controlling quantities of Table 1 and
+gap), score intervals (eq. (5) of the paper), attention intervals (Lemma 2), the controlling quantities of Table 1 and
 the regime labels."""
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ def grothendieck_upper() -> float:
 
 
 def eta(Delta: float) -> float:
-    """``Delta^2/8 * exp(Delta)``: the interpolation bound of the secant gap (Lemma 3, eq. (25)) on an interval of width
-    ``Delta``, with ``e^Delta`` in place of ``e^{t_hi}`` (not the score covariance eta of eq. (18))."""
+    """``Delta^2/8 * exp(Delta)``: the interpolation bound of the secant gap (Lemma 3) on an interval of width
+    ``Delta``, with ``e^Delta`` in place of ``e^{t_hi}`` (not the score covariance eta of eq. (9))."""
     return Delta**2 / 8 * (math.exp(Delta) if Delta < 709.0 else math.inf)
 
 
@@ -58,7 +58,7 @@ def bound_general(eps: float, rad: float, c_norm: float) -> float:
 
 # ----------------------------------------------------------------------- lemma quantities
 def l4_onehot_bound(n: int, gamma: float) -> float:
-    """Margin bound of Lemma 2(iii), eq. (23): ``||a - e_{j*}||_1 <= 2(n-1)e^{-gamma}/(1+(n-1)e^{-gamma})``."""
+    """Margin bound of Lemma 2(iii), eq. (13): ``||a - e_{j*}||_1 <= 2(n-1)e^{-gamma}/(1+(n-1)e^{-gamma})``."""
     return eps_C(n, gamma)
 
 
@@ -83,7 +83,7 @@ def l6_layernorm_radius(g: np.ndarray, rho_x: float, xbar: np.ndarray) -> float:
 
 
 def p7_secant_error(s_lo: float, s_hi: float) -> float:
-    """Interpolation bound of the secant gap (Lemma 3, eq. (25)): ``max (secant - exp) <= Delta^2/8 e^{s_hi}``."""
+    """Interpolation bound of the secant gap (Lemma 3): ``max (secant - exp) <= Delta^2/8 e^{s_hi}``."""
     return (s_hi - s_lo) ** 2 / 8 * math.exp(s_hi)
 
 
@@ -159,7 +159,7 @@ def log_softmax_bounds(s_lo: np.ndarray, s_hi: np.ndarray) -> tuple[np.ndarray, 
 
 def t_intervals(s_lo: np.ndarray, s_hi: np.ndarray, mode: str = "tight") -> tuple[np.ndarray, np.ndarray]:
     """Interval of the log-attention ``t_j = s_j - tau = log a_j`` on which the SDP places its exp sandwich.
-    ``"tight"`` (default; eq. (14) of the paper): ``[s_lo_j - tau_hi, s_hi_j - tau_lo]`` intersected with
+    ``"tight"`` (default; eq. (6) of the paper): ``[s_lo_j - tau_hi, s_hi_j - tau_lo]`` intersected with
     ``[log a_lo_j, log a_hi_j]`` (Lemma 2), which is always contained in the former, so ``tight = [log a_lo, log a_hi]``
     (the max/min is still taken literally). ``"loose"``: the wider intervals ``[s_lo_j - tau_hi, s_hi_j - tau_lo]``."""
     s_lo = np.asarray(s_lo, float)
@@ -175,12 +175,12 @@ def t_intervals(s_lo: np.ndarray, s_hi: np.ndarray, mode: str = "tight") -> tupl
 
 
 def t_width(s_lo, s_hi, mode: str = "tight") -> float:
-    """``w_t = max_j (t_hi_j - t_lo_j)``: the secant width of eq. (14) (for ``mode="tight"``)."""
+    """``w_t = max_j (t_hi_j - t_lo_j)``: the secant width of eq. (6) (for ``mode="tight"``)."""
     t_lo, t_hi = t_intervals(s_lo, s_hi, mode)
     return float(np.max(t_hi - t_lo))
 
 
-# -------------------------------------------------------------------- score intervals (eq. (12))
+# -------------------------------------------------------------------- score intervals (eq. (5))
 def _score_pieces(inst: Instance, j: int):
     """For key token ``j``: (rep_i, rep_j, same) with ``s = (c_i + B_i u_i)^T M (c_j + B_j u_j)``."""
     rep_i = S.affine(inst.sets[inst.query])
@@ -551,7 +551,7 @@ def child_controls(ctrl: dict, s_lo: np.ndarray, s_hi: np.ndarray, n: int) -> di
 
 
 def choose_cut(ctrl: dict, n: int, cut: str = "auto") -> dict:
-    """The certified pair ``(ahat, eps)`` of the l1 cut of the pattern polytope (32): ``"B"`` the width pair, ``"C"``
+    """The certified pair ``(ahat, eps)`` of the l1 cut of the pattern polytope (18): ``"B"`` the width pair, ``"C"``
     the margin pair (when ``gamma > 0``), ``"auto"`` the one with the smaller radius. Returns
     ``{"cut_used", "ahat", "eps", "eps_for_bound"}``; ``cut="none"`` gives
     ``eps = None`` (no cut; trivial eps = 1 for the bound since ``||a - a'||_1 <= 2``)."""
@@ -568,6 +568,6 @@ def choose_cut(ctrl: dict, n: int, cut: str = "auto") -> dict:
         raise ValueError(f"cut {cut!r} not applicable (gamma={ctrl['gamma']})")
     ahat, eps = options[cut]
     eps_bound = float(eps)
-    if cut == "B" and "C" in options:  # the width-pair polytope (in box ∩ simplex) inherits the margin bound (35)
+    if cut == "B" and "C" in options:  # the width-pair polytope (in box ∩ simplex) inherits the margin bound (21)
         eps_bound = min(eps_bound, float(options["C"][1]))
     return {"cut_used": cut, "ahat": ahat, "eps": float(eps), "eps_for_bound": eps_bound}

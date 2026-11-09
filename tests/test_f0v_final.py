@@ -1,10 +1,10 @@
-"""The second-order gap bound (39) of Theorem 12 — the exact secant gap ``D_j`` (Lemma 3), the fractional knapsack (19),
+"""The second-order gap bound (25) of Theorem 12 — the exact secant gap ``D_j`` (Lemma 3), the fractional knapsack (10),
 and the bound against Gurobi on the 50 shared synthetic instances.
 
 (1) ``D_j`` (:func:`theory.secant_gap`) equals the maximum of ``ell_j - exp`` on a dense grid (60-digit mpmath, zoomed
 around the best grid point until the grid spacing is negligible) to 1e-12 relative on random intervals with ``w`` from
 1e-8 to 60; (2) ``D_j <= min(S_j, B_j - A_j)``; (3) the knapsack equals an LP (scipy ``linprog``) on random data;
-(4) bound (39) holds against the exact bracket (never ``violated``; ``satisfied`` when Gurobi proves optimality) and is
+(4) bound (25) holds against the exact bracket (never ``violated``; ``satisfied`` when Gurobi proves optimality) and is
 never above the per-key-slack form ``bound_F0v`` nor its saturating form (``theory.saturated_slack``)."""
 import math
 
@@ -127,7 +127,7 @@ def test_F0v_final_against_exact(seed):
     assert ff["bound_F0v_final"] <= sat * (1 + 1e-12) + 1e-15
     assert ff["bound_F0v_final"] <= pk["bound_F0v"] * (1 + 1e-12) + 1e-15
     assert ff["Pi_v_star"] <= pk["Pi_v"] * (1 + 1e-12) + 1e-15
-    # bound (39) against the exact bracket
+    # bound (25) against the exact bracket
     lb, ub = u["lb"], u["ub"]
     ch = theorem_check(rec["value_safe"], ff["bound_F0v_final"], lb, ub)
     assert ch["status"] != "violated", (seed, ch)

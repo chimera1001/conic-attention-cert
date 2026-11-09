@@ -1,4 +1,4 @@
-"""Defaults: the width-pair cut, the inherited margin bound (35), and the per-key tolerance of the exact fixed-query
+"""Defaults: the width-pair cut, the inherited margin bound (21), and the per-key tolerance of the exact fixed-query
 solver (Theorem 7)."""
 import math
 
@@ -21,7 +21,7 @@ def test_default_cut_is_width_pair():
 
 def test_margin_cut_implied_by_intervals():
     """Proof of Theorem 9: ``2 (1 - a_lo_{j*}) <= eps_C(n, gamma)`` whenever ``gamma > 0``, so every point of box ∩
-    simplex satisfies the margin pair's l1 cut and the width-pair polytope inherits the margin bound (35)
+    simplex satisfies the margin pair's l1 cut and the width-pair polytope inherits the margin bound (21)
     (``eps_for_bound``)."""
     rng = np.random.default_rng(1829)
     seen = 0

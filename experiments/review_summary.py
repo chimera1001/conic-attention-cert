@@ -181,7 +181,7 @@ def crown_intervals(out: Path):
     return D
 
 
-# ------------------------------------------------------------------------------------------------ terms of bound (39)
+# ------------------------------------------------------------------------------------------------ terms of bound (25)
 def bound_terms(out: Path):
     import pandas as pd
 
@@ -192,7 +192,7 @@ def bound_terms(out: Path):
     T = D[P4A_COLS].sort_values(["source", "rho_rel", "layer", "head", "prompt"])
     _csv(T, out / "summary" / "gptoss_bound_terms.csv")
     _csv(T, out / "summary" / "P9c_gptoss_bound_terms.csv", "%.10g")
-    print("\nTerms of bound (39) on gpt-oss-20b (KN = knapsack term, cov = covariance term; shares of the bound)")
+    print("\nTerms of bound (25) on gpt-oss-20b (KN = knapsack term, cov = covariance term; shares of the bound)")
     for part, P in D.groupby("part"):
         tm = P[["F0vf_term_knapsack", "F0vf_term_eta", "F0vf_term_cov"]].to_numpy(dtype=float)
         a = P[~P.floor]
@@ -236,14 +236,14 @@ def margin_exceptions(out: Path):
                       D[~D.floor_tie][["unit", "best_method", "ratio_cert_to_best"]].itertuples(index=False)))
     nf = D[~D.floor_tie]
     if len(nf):
-        print(f"  non-ties: covariance share of bound (39) {nf.share_cov.min():.2f}-{nf.share_cov.max():.2f}, gap / bound "
+        print(f"  non-ties: covariance share of bound (25) {nf.share_cov.min():.2f}-{nf.share_cov.max():.2f}, gap / bound "
               f"{nf.gap_over_bound.min():.3f}-{nf.gap_over_bound.max():.3f} (all units: median {X.gap_over_bound.median():.3f})")
     rs = D[D.resolve_check.notna()]
     if len(rs):
         print(f"  repeated re-solves: {sum(x['reproduced_value_safe'] for x in rs.resolve_check)} / {len(rs)} reproduce "
               "the stored value_safe")
     if "d_bound_recomputed" in D:
-        print(f"  bound (39) recomputed from the stored intervals: largest difference {D.d_bound_recomputed.max():.1e}")
+        print(f"  bound (25) recomputed from the stored intervals: largest difference {D.d_bound_recomputed.max():.1e}")
     return D
 
 
@@ -254,7 +254,7 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
     out, _, _ = C.dirs(a.out, None, a.quick)
     done = [n for n, fn in (("curvature certificate", taylor), ("CROWN with the intervals", crown_intervals),
-                            ("terms of bound (39)", bound_terms), ("logit-margin exceptions", margin_exceptions))
+                            ("terms of bound (25)", bound_terms), ("logit-margin exceptions", margin_exceptions))
             if fn(out) is not None]
     print(f"\nsummaries ({', '.join(done) or 'none: no records'}) in {out / 'summary'}")
 

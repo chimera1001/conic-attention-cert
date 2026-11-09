@@ -91,7 +91,7 @@ def test_crown_with_score_intervals_on_a_synthetic_head():
 
 
 def test_bound_terms_recomputed_from_a_stored_record(syn_cache, tmp_path):  # noqa: F811
-    """A fixed-query gpt-oss unit (synthetic weights) stored with the fields of part f, its terms of bound (39) from the
+    """A fixed-query gpt-oss unit (synthetic weights) stored with the fields of part f, its terms of bound (25) from the
     pipeline's own call (:func:`aimp.pipeline.collapse_fields`): recomputed from the stored intervals they are the same."""
     import json
 

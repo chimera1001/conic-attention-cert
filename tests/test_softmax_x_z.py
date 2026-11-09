@@ -97,7 +97,7 @@ def test_prop9_softmax_x_z_order():
             r = solve_sdp(inst, ctrl, rlt=fam, diag_a=da, t_interval="loose")  # the loose log-attention intervals
             assert r.value >= p_star - 1e-7
             g[key].append(r.value - p_star)
-            rt = solve_sdp(inst, ctrl, rlt=fam, diag_a=da, t_interval="tight")  # the intervals (14): valid, never worse
+            rt = solve_sdp(inst, ctrl, rlt=fam, diag_a=da, t_interval="tight")  # the intervals (6): valid, never worse
             assert p_star - 1e-7 <= rt.value <= r.value + 1e-7
     assert _order(kappas, g["s1_unit"]) < 1.2
     assert _order(kappas, g["s2_unit"]) > 1.9

@@ -1,5 +1,5 @@
 """Shared helpers of the review computations (``experiments/review_*.py``): the computations added to Section 7 for the
-journal version (the curvature certificate, CROWN with the certificate's score intervals, the terms of bound (39) on
+journal version (the curvature certificate, CROWN with the certificate's score intervals, the terms of bound (25) on
 gpt-oss-20b, the GPT-2 logit-margin exceptions).
 
 They read the stored records of the other experiments (``--refs``, default ``results_dir()``; with ``--quick`` the

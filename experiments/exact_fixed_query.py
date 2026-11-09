@@ -8,7 +8,7 @@ Parts:
 * ``sdp`` — the certificate on the 2,880 units at position 4 and radii 0.002–0.02, against the exact worst case.
 * ``benchmark`` — writes ``benchmark/units.csv`` and ``benchmark/angles.csv.gz`` from the ``exact`` records.
 * ``summary`` — Table 5 (relative gaps, slopes between 0.002 and 0.005, share within 1%), the gap as a fraction of the
-  second-order bound (39), multistart against the exact worst case, and the ratio of the secant widths with a varying
+  second-order bound (25), multistart against the exact worst case, and the ratio of the secant widths with a varying
   and a fixed query (needs the records of ``experiments/gpt2_ladder.py``).
 
 Usage (from the repository root)::
@@ -285,7 +285,7 @@ def summary(base: Path, refs: Path) -> dict:
         print(f"per-unit slopes on 0.002-0.005: certificate {_q(sl['cert'])}, first order {_q(sl['greedy'])}, "
               f"range of motion {_q(sl['spread'])}")
         gb = Q.gap_over_bound.astype(float)
-        print(f"gap / second-order bound (39): max {gb.max():.3g}, median {gb.median():.3g}")
+        print(f"gap / second-order bound (25): max {gb.max():.3g}, median {gb.median():.3g}")
         lg = (Q.lb_strong_gap_exact.astype(float) / Q["range"].astype(float)).abs()
         print(f"multistart vs exact worst case: max |p* - lb| / nominal value spread = {lg.max():.2e} "
               f"(within 1e-9 of the nominal spread on {(lg <= 1e-9).mean():.1%} of units)")
